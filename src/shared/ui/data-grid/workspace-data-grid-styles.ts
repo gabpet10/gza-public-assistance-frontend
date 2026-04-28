@@ -16,17 +16,17 @@ export const workspaceDataGridSx: SxProps<Theme> = {
   [`--DataGrid-overlayHeight`]: workspaceGridOverlayHeight,
   "& .MuiDataGrid-columnHeaders": {
     background:
-      "linear-gradient(180deg, rgba(8,19,31,0.18) 0%, rgba(8,19,31,0.12) 100%)",
-    borderBottom: "2px solid rgba(8, 19, 31, 0.26)",
+      "linear-gradient(180deg, rgba(11,58,83,0.18) 0%, rgba(11,58,83,0.12) 100%)",
+    borderBottom: "2px solid rgba(11, 58, 83, 0.28)",
     minHeight: 56,
   },
   "& .MuiDataGrid-columnHeader": {
-    borderRight: "1px solid rgba(8, 19, 31, 0.08)",
+    borderRight: "1px solid rgba(20, 32, 43, 0.08)",
     px: 1.25,
   },
   "& .MuiDataGrid-columnHeaderTitle": {
     fontWeight: 800,
-    color: "#08131f",
+    color: "#14202b",
     letterSpacing: "0.03em",
     fontSize: "0.82rem",
     textTransform: "uppercase",
@@ -35,34 +35,34 @@ export const workspaceDataGridSx: SxProps<Theme> = {
     backgroundColor: "rgba(255, 255, 255, 0.92)",
   },
   "& .workspace-row-odd": {
-    backgroundColor: "rgba(8, 19, 31, 0.05)",
+    backgroundColor: "rgba(11, 58, 83, 0.05)",
   },
   "& .MuiDataGrid-cell": {
-    borderBottom: "1px solid rgba(8, 19, 31, 0.08)",
+    borderBottom: "1px solid rgba(20, 32, 43, 0.08)",
     py: 1.1,
     px: 1.25,
     lineHeight: 1.45,
   },
   "& .MuiDataGrid-row:hover": {
-    backgroundColor: "rgba(15, 109, 122, 0.13)",
+    backgroundColor: "rgba(30, 143, 166, 0.14)",
   },
   "& .workspace-row-selected": {
-    backgroundColor: "rgba(15, 109, 122, 0.2)",
+    backgroundColor: "rgba(30, 143, 166, 0.22)",
   },
   "& .workspace-row-selected:hover": {
-    backgroundColor: "rgba(15, 109, 122, 0.25)",
+    backgroundColor: "rgba(30, 143, 166, 0.28)",
   },
   "& .MuiDataGrid-row.Mui-selected": {
-    backgroundColor: "rgba(15, 109, 122, 0.2)",
+    backgroundColor: "rgba(30, 143, 166, 0.22)",
   },
   "& .MuiDataGrid-row.Mui-selected:hover": {
-    backgroundColor: "rgba(15, 109, 122, 0.25)",
+    backgroundColor: "rgba(30, 143, 166, 0.28)",
   },
   "& .MuiDataGrid-footerContainer": {
     minHeight: 60,
     background:
-      "linear-gradient(180deg, rgba(8, 19, 31, 0.16) 0%, rgba(8, 19, 31, 0.22) 100%)",
-    borderTop: "2px solid rgba(8, 19, 31, 0.35)",
+      "linear-gradient(180deg, rgba(11, 58, 83, 0.16) 0%, rgba(11, 58, 83, 0.22) 100%)",
+    borderTop: "2px solid rgba(11, 58, 83, 0.34)",
   },
   "& .MuiTablePagination-root": {
     color: "#f3f7fb",
@@ -79,21 +79,21 @@ export const workspaceDataGridSx: SxProps<Theme> = {
 export const organizationsEnterpriseDataGridSx: SxProps<Theme> = [
   workspaceDataGridSx,
   {
-    border: "1px solid rgba(8, 19, 31, 0.12)",
+    border: "1px solid rgba(20, 32, 43, 0.12)",
     borderRadius: 1,
-    boxShadow: "0 14px 32px rgba(8, 19, 31, 0.09)",
+    boxShadow: "0 14px 32px rgba(11, 58, 83, 0.09)",
     backgroundColor: "#ffffff",
     overflow: "hidden",
     "& .MuiDataGrid-columnHeaders": {
       background:
-        "linear-gradient(180deg, rgba(243,247,251,0.96) 0%, rgba(231,238,245,0.96) 100%)",
-      borderBottom: "1px solid rgba(8, 19, 31, 0.2)",
+        "linear-gradient(180deg, rgba(247,251,253,0.98) 0%, rgba(234,243,247,0.98) 100%)",
+      borderBottom: "1px solid rgba(20, 32, 43, 0.2)",
       minHeight: 54,
       borderTopLeftRadius: 8,
       borderTopRightRadius: 8,
     },
     "& .MuiDataGrid-columnHeader": {
-      borderRight: "1px solid rgba(8, 19, 31, 0.12)",
+      borderRight: "1px solid rgba(20, 32, 43, 0.12)",
       px: 1.5,
     },
     "& .MuiDataGrid-columnHeaderTitle": {
@@ -101,40 +101,40 @@ export const organizationsEnterpriseDataGridSx: SxProps<Theme> = [
       letterSpacing: "0.01em",
       fontSize: "0.87rem",
       fontWeight: 700,
-      color: "#102235",
+      color: "#173043",
     },
     "& .workspace-row-even": {
       backgroundColor: "#ffffff",
     },
     "& .workspace-row-odd": {
-      backgroundColor: "#f8fbfe",
+      backgroundColor: "#f6fafc",
     },
     "& .MuiDataGrid-cell": {
-      borderBottom: "1px solid rgba(8, 19, 31, 0.1)",
-      borderRight: "1px solid rgba(8, 19, 31, 0.07)",
+      borderBottom: "1px solid rgba(20, 32, 43, 0.1)",
+      borderRight: "1px solid rgba(20, 32, 43, 0.07)",
       py: 1.15,
       px: 1.5,
       lineHeight: 1.45,
     },
     "& .MuiDataGrid-row:hover": {
-      backgroundColor: "rgba(15, 109, 122, 0.1)",
+      backgroundColor: "rgba(30, 143, 166, 0.1)",
     },
     "& .workspace-row-selected": {
-      backgroundColor: "rgba(15, 109, 122, 0.16)",
+      backgroundColor: "rgba(30, 143, 166, 0.16)",
     },
     "& .workspace-row-selected:hover": {
-      backgroundColor: "rgba(15, 109, 122, 0.2)",
+      backgroundColor: "rgba(30, 143, 166, 0.22)",
     },
     "& .MuiDataGrid-row.Mui-selected": {
-      backgroundColor: "rgba(15, 109, 122, 0.16)",
+      backgroundColor: "rgba(30, 143, 166, 0.16)",
     },
     "& .MuiDataGrid-row.Mui-selected:hover": {
-      backgroundColor: "rgba(15, 109, 122, 0.2)",
+      backgroundColor: "rgba(30, 143, 166, 0.22)",
     },
     "& .MuiDataGrid-footerContainer": {
       minHeight: 56,
-      background: "#f3f7fb",
-      borderTop: "1px solid rgba(8, 19, 31, 0.16)",
+      background: "#edf4f8",
+      borderTop: "1px solid rgba(20, 32, 43, 0.16)",
     },
     "& .MuiTablePagination-root": {
       color: "#243547",
@@ -156,7 +156,7 @@ export const workspaceDetailActionButtonSx: SxProps<Theme> = {
   width: 28,
   height: 28,
   "&:hover": {
-    backgroundColor: "#0c5b65",
+    backgroundColor: "#197a8e",
   },
 };
 

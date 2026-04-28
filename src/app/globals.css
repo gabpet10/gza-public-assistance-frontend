@@ -22,14 +22,14 @@
 
 :root {
   color-scheme: light;
-  --background: #f6f1e8;
-  --background-soft: rgba(255, 255, 255, 0.72);
-  --foreground: #08131f;
-  --foreground-muted: #51606e;
-  --border-strong: rgba(8, 19, 31, 0.12);
-  --border-soft: rgba(8, 19, 31, 0.08);
-  --accent: #d95f43;
-  --accent-secondary: #0f6d7a;
+  --background: #f4f7fa;
+  --background-soft: rgba(255, 255, 255, 0.82);
+  --foreground: #14202b;
+  --foreground-muted: #4b5f70;
+  --border-strong: rgba(20, 32, 43, 0.16);
+  --border-soft: rgba(20, 32, 43, 0.1);
+  --accent: #f28c28;
+  --accent-secondary: #1e8fa6;
 }
 
 * {
@@ -45,7 +45,7 @@ body {
 }
 
 body {
-  background-image: radial-gradient(circle at top left, rgba(217, 95, 67, 0.16), transparent 30%), radial-gradient(circle at top right, rgba(15, 109, 122, 0.12), transparent 28%), linear-gradient(180deg, #f8f4eb 0%, #f3efe6 100%);
+  background-image: radial-gradient(circle at 12% 6%, rgba(242, 140, 40, 0.15), transparent 32%), radial-gradient(circle at 88% 0%, rgba(30, 143, 166, 0.14), transparent 28%), linear-gradient(180deg, #f9fbfd 0%, #f1f5f8 100%);
 }
 
 /* Keep browser autofill from overriding MUI input look and breaking layout contrast. */
@@ -83,8 +83,8 @@ a {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.24;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(8, 19, 31, 0.05) 1px, transparent 1px);
+  opacity: 0.2;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(11, 58, 83, 0.05) 1px, transparent 1px);
   background-size: 26px 26px;
   mask-image: radial-gradient(circle at center, black 46%, transparent 100%);
 }

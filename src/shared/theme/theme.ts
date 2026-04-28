@@ -37,29 +37,29 @@ export const appTheme = createTheme({
   cssVariables: true,
   palette: {
     primary: {
-      main: "#08131f",
+      main: "#0b3a53",
     },
     secondary: {
-      main: "#d95f43",
+      main: "#1e8fa6",
     },
     success: {
-      main: "#5d7a2c",
+      main: "#2e7d5b",
     },
     warning: {
-      main: "#b7791f",
+      main: "#f28c28",
     },
     info: {
-      main: "#0f6d7a",
+      main: "#2f6fab",
     },
     background: {
-      default: "#f6f1e8",
-      paper: "#fffdfa",
+      default: "#f4f7fa",
+      paper: "#ffffff",
     },
     text: {
-      primary: "#08131f",
-      secondary: "#51606e",
+      primary: "#14202b",
+      secondary: "#4b5f70",
     },
-    divider: "rgba(8, 19, 31, 0.08)",
+    divider: "rgba(20, 32, 43, 0.1)",
   },
   shape: {
     borderRadius: 20,
@@ -96,7 +96,7 @@ export const appTheme = createTheme({
       textTransform: "uppercase",
       letterSpacing: "0.16em",
       fontWeight: 800,
-      color: "#d95f43",
+      color: "#f28c28",
     },
     sectionTitle: {
       fontSize: "1.5rem",
@@ -139,7 +139,7 @@ export const appTheme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          backgroundColor: "rgba(255,255,255,0.72)",
+          backgroundColor: "rgba(255,255,255,0.88)",
         },
       },
     },

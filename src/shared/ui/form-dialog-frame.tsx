@@ -24,7 +24,7 @@ export const formDialogPrimaryActionSx: SxProps<Theme> = {
   backgroundColor: "var(--accent-secondary)",
   color: "#ffffff",
   "&:hover": {
-    backgroundColor: "#0c5b65",
+    backgroundColor: "#197a8e",
   },
 };
 
@@ -49,8 +49,8 @@ export function FeatureDialogTitle({
         px: 1.5,
         py: 1.25,
         background:
-          "linear-gradient(145deg, rgba(15,109,122,0.12) 0%, rgba(8,19,31,0.08) 100%)",
-        border: "1px solid rgba(8, 19, 31, 0.12)",
+          "linear-gradient(145deg, rgba(30,143,166,0.16) 0%, rgba(11,58,83,0.08) 100%)",
+        border: "1px solid rgba(20, 32, 43, 0.12)",
       }}
     >
       <Box

@@ -650,13 +650,18 @@ export function VolunteersWorkspace() {
               setSearchText(value);
               setPaginationModel((current) => ({ ...current, page: 0 }));
             }}
-            filterLabel="Stato"
-            filterValue={statusFilter}
-            filterOptions={[...statusOptions]}
-            onFilterChange={(value) => {
-              setStatusFilter(value as VolunteerStatusFilter);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            filters={[
+              {
+                key: "status",
+                label: "Stato",
+                value: statusFilter,
+                options: [...statusOptions],
+                onChange: (value) => {
+                  setStatusFilter(value as VolunteerStatusFilter);
+                  setPaginationModel((current) => ({ ...current, page: 0 }));
+                },
+              },
+            ]}
           />
 
           {listError ? (

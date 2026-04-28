@@ -5,17 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#08131f",
-        sand: "#f3efe6",
-        ember: "#d95f43",
-        ocean: "#0f6d7a",
-        moss: "#7a8b52",
+        ink: "#14202b",
+        sand: "#f4f7fa",
+        ember: "#f28c28",
+        ocean: "#1e8fa6",
+        moss: "#3f7f66",
       },
       boxShadow: {
-        panel: "0 18px 50px rgba(8, 19, 31, 0.12)",
+        panel: "0 16px 40px rgba(11, 58, 83, 0.1)",
       },
       backgroundImage: {
-        mesh: "radial-gradient(circle at top left, rgba(217, 95, 67, 0.18), transparent 34%), radial-gradient(circle at top right, rgba(15, 109, 122, 0.15), transparent 32%), linear-gradient(180deg, #f8f4eb 0%, #f3efe6 100%)",
+        mesh: "radial-gradient(circle at 12% 6%, rgba(242, 140, 40, 0.15), transparent 34%), radial-gradient(circle at 88% 0%, rgba(30, 143, 166, 0.14), transparent 32%), linear-gradient(180deg, #f9fbfd 0%, #f1f5f8 100%)",
       },
     },
   },

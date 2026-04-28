@@ -20,10 +20,6 @@ export type ToolbarFilter = {
 type SearchToolbarProps = Readonly<{
   searchText: string;
   onSearchTextChange: (value: string) => void;
-  filterValue?: string;
-  filterOptions?: SelectOption[];
-  filterLabel?: string;
-  onFilterChange?: (value: string) => void;
   searchPlaceholder?: string;
   filters?: ToolbarFilter[];
 }>;
@@ -31,28 +27,10 @@ type SearchToolbarProps = Readonly<{
 export function SearchToolbar({
   searchText,
   onSearchTextChange,
-  filterValue,
-  filterOptions,
-  filterLabel,
-  onFilterChange,
   searchPlaceholder,
   filters,
 }: SearchToolbarProps) {
-  const resolvedFilters =
-    filters && filters.length > 0
-      ? filters
-      : filterOptions && onFilterChange
-        ? [
-            {
-              key: "legacy-filter",
-              label: filterLabel ?? "Filtro",
-              value: filterValue ?? "",
-              options: filterOptions,
-              onChange: onFilterChange,
-              minWidth: 200,
-            },
-          ]
-        : [];
+  const resolvedFilters = filters ?? [];
 
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={2}>

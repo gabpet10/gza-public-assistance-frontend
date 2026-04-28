@@ -393,13 +393,18 @@ export function OrganizationsWorkspace() {
             searchText={searchText}
             searchPlaceholder="Cerca organizzazione, città o partita IVA"
             onSearchTextChange={setSearchText}
-            filterLabel="Stato"
-            filterValue={statusFilter}
-            filterOptions={[...statusOptions]}
-            onFilterChange={(value) => {
-              setStatusFilter(value as OrganizationStatusFilter);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            filters={[
+              {
+                key: "status",
+                label: "Stato",
+                value: statusFilter,
+                options: [...statusOptions],
+                onChange: (value) => {
+                  setStatusFilter(value as OrganizationStatusFilter);
+                  setPaginationModel((current) => ({ ...current, page: 0 }));
+                },
+              },
+            ]}
           />
           {listError ? (
             <ErrorState

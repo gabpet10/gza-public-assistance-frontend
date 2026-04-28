@@ -16,6 +16,7 @@ import {
   Business,
   Place,
   DirectionsCar,
+  LocalShipping,
 } from "@mui/icons-material";
 import {
   AppBar,
@@ -33,7 +34,6 @@ import {
   Button,
   useTheme,
 } from "@mui/material";
-// import { PageContainer } from "@/shared/ui/page-container";
 import { useAuth } from "@/core/auth/auth-context";
 import { usePermissions } from "@/core/auth/use-permissions";
 import { getPrimaryRoleFromSession } from "@/core/auth/roles";
@@ -49,6 +49,7 @@ const menuIcons: Record<string, React.ReactNode> = {
   Business: <Business fontSize="medium" />,
   Place: <Place fontSize="medium" />,
   DirectionsCar: <DirectionsCar fontSize="medium" />,
+  LocalShipping: <LocalShipping fontSize="medium" />,
 };
 
 const drawerWidth = 248;

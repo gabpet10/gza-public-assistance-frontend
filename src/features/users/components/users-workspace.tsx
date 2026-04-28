@@ -507,13 +507,18 @@ export function UsersWorkspace() {
               setSearchText(value);
               setPaginationModel((current) => ({ ...current, page: 0 }));
             }}
-            filterLabel="Stato"
-            filterValue={statusFilter}
-            filterOptions={[...statusOptions]}
-            onFilterChange={(value) => {
-              setStatusFilter(value as UserStatusFilter);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            filters={[
+              {
+                key: "status",
+                label: "Stato",
+                value: statusFilter,
+                options: [...statusOptions],
+                onChange: (value) => {
+                  setStatusFilter(value as UserStatusFilter);
+                  setPaginationModel((current) => ({ ...current, page: 0 }));
+                },
+              },
+            ]}
           />
 
           {listError ? (
