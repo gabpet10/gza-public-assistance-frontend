@@ -558,7 +558,12 @@ export function TransportServicesWorkspace() {
     setActionError(null);
   };
 
-  const handleCalendarEventSelect = async (eventId: string) => {
+  const handleCalendarEventSelect = (eventId: string) => {
+    setSelectedServiceId(eventId);
+    setActionError(null);
+  };
+
+  const handleCalendarEventOpenDetail = (eventId: string) => {
     setOpenedServiceId(null);
     setDetailError(null);
     setSelectedServiceId(eventId);
@@ -567,7 +572,7 @@ export function TransportServicesWorkspace() {
     const selectedFromGrid = rows.find((item) => item.id === eventId);
     if (selectedFromGrid) {
       setSelectedServiceFallback(null);
-      editDialog.open();
+      openServiceDetail(eventId);
       return;
     }
 
@@ -578,21 +583,12 @@ export function TransportServicesWorkspace() {
       setSelectedServiceFallback(
         toServiceFallbackFromCalendarEvent(selectedFromCalendar),
       );
-      editDialog.open();
+      openServiceDetail(eventId);
       return;
     }
 
-    try {
-      const service = await getTransportServiceById(eventId);
-      setSelectedServiceFallback(service);
-      editDialog.open();
-    } catch {
-      setSelectedServiceFallback(null);
-      setActionToast({
-        message: "Caricamento servizio non riuscito per la modifica.",
-        severity: "warning",
-      });
-    }
+    setSelectedServiceFallback(null);
+    openServiceDetail(eventId);
   };
 
   const handleCalendarEmptySlotCreate = (seedDateIso: string) => {
@@ -1682,9 +1678,8 @@ export function TransportServicesWorkspace() {
               visibleDateIso={calendarVisibleDateIso}
               onViewChange={handleCalendarViewChange}
               onVisibleDateChange={handleCalendarVisibleDateChange}
-              onSelectEvent={(eventId) => {
-                void handleCalendarEventSelect(eventId);
-              }}
+              onSelectEvent={handleCalendarEventSelect}
+              onOpenEventDetail={handleCalendarEventOpenDetail}
               onCreateSlot={handleCalendarEmptySlotCreate}
               onShiftEvent={(eventId, minutesDelta) => {
                 void handleShiftCalendarEventByMinutes(eventId, minutesDelta);
@@ -1699,7 +1694,7 @@ export function TransportServicesWorkspace() {
       </ContentCard>
 
       <TransportServiceDetailPanel
-        open={activeView === "grid" && Boolean(openedServiceId)}
+        open={Boolean(openedServiceId)}
         service={selectedTransportService}
         isLoading={isDetailLoading}
         isActionSubmitting={isActionSubmitting}

@@ -259,6 +259,10 @@ export function TransportServiceFormDialog({
         return "Inserisci data e ora pianificate valide.";
       }
 
+      if (scheduledDate.getTime() < Date.now()) {
+        return "La data/ora di inizio non puo essere nel passato.";
+      }
+
       if (formValues.scheduledEnd) {
         const scheduledEndDate = new Date(formValues.scheduledEnd);
         if (Number.isNaN(scheduledEndDate.getTime())) {

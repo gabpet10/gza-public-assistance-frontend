@@ -113,12 +113,12 @@ export function VolunteerSkillFormDialog({
         <DialogTitle sx={{ pb: 1.25 }}>
           <FeatureDialogTitle
             icon={<PlaylistAdd sx={{ fontSize: 20 }} />}
-            eyebrow="Skill volontario"
+            eyebrow={title}
             title={title}
           />
         </DialogTitle>
         <DialogContent sx={formDialogContentSx}>
-          <Stack spacing={2.5}>
+          <Stack spacing={2.5} sx={{ pt: 1.5 }}>
             {submitError ? <Alert severity="error">{submitError}</Alert> : null}
             <TextField
               select

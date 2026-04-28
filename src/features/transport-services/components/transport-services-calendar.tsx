@@ -31,6 +31,7 @@ type TransportServicesCalendarProps = {
   onViewChange: (view: "day" | "week" | "month" | "agenda") => void;
   onVisibleDateChange: (nextVisibleDateIso: string) => void;
   onSelectEvent: (eventId: string) => void;
+  onOpenEventDetail: (eventId: string) => void;
   onCreateSlot: (seedDateIso: string) => void;
   onShiftEvent: (eventId: string, minutesDelta: number) => void;
 };
@@ -162,6 +163,7 @@ export function TransportServicesCalendar({
   onViewChange,
   onVisibleDateChange,
   onSelectEvent,
+  onOpenEventDetail,
   onCreateSlot,
   onShiftEvent,
 }: TransportServicesCalendarProps) {
@@ -173,6 +175,8 @@ export function TransportServicesCalendar({
   const [selectedVolunteerIds, setSelectedVolunteerIds] = useState<string[]>(
     [],
   );
+  const [includeEventsWithoutVolunteers, setIncludeEventsWithoutVolunteers] =
+    useState(false);
 
   const sortedEvents = useMemo(
     () =>
@@ -226,17 +230,31 @@ export function TransportServicesCalendar({
   }, [renderableEvents]);
 
   const filteredRenderableEvents = useMemo(() => {
-    if (!isSchedulerSidePanelOpen || selectedVolunteerIds.length === 0) {
+    if (
+      !isSchedulerSidePanelOpen ||
+      (selectedVolunteerIds.length === 0 && !includeEventsWithoutVolunteers)
+    ) {
       return renderableEvents;
     }
 
     const selectedSet = new Set(selectedVolunteerIds);
-    return renderableEvents.filter((event) =>
-      event.volunteers.some((volunteer) =>
+    return renderableEvents.filter((event) => {
+      const hasSelectedVolunteer = event.volunteers.some((volunteer) =>
         selectedSet.has(volunteer.volunteerId),
-      ),
-    );
-  }, [isSchedulerSidePanelOpen, renderableEvents, selectedVolunteerIds]);
+      );
+      const hasNoVolunteers = event.volunteers.length === 0;
+
+      return (
+        hasSelectedVolunteer ||
+        (includeEventsWithoutVolunteers && hasNoVolunteers)
+      );
+    });
+  }, [
+    includeEventsWithoutVolunteers,
+    isSchedulerSidePanelOpen,
+    renderableEvents,
+    selectedVolunteerIds,
+  ]);
 
   const schedulerEvents = useMemo<SchedulerTransportEvent[]>(
     () =>
@@ -357,6 +375,29 @@ export function TransportServicesCalendar({
     return calendarVisibleDate.toISOString();
   };
 
+  const getEventIdFromTarget = (target: HTMLElement) => {
+    const container = target.closest(".MuiEventCalendar-root");
+    if (!(container instanceof HTMLElement)) {
+      return null;
+    }
+
+    let current: HTMLElement | null = target;
+    while (current && current !== container) {
+      const tokenClass = Array.from(current.classList).find((className) =>
+        className.startsWith(EVENT_TOKEN_CLASS_PREFIX),
+      );
+
+      if (tokenClass) {
+        const token = tokenClass.slice(EVENT_TOKEN_CLASS_PREFIX.length);
+        return schedulerEventIdByToken.get(token) ?? null;
+      }
+
+      current = current.parentElement;
+    }
+
+    return null;
+  };
+
   const handleSchedulerClickCapture = (
     event: React.MouseEvent<HTMLDivElement>,
   ) => {
@@ -374,27 +415,54 @@ export function TransportServicesCalendar({
       return;
     }
 
-    let current: HTMLElement | null = target;
-    while (current && current !== container) {
-      const tokenClass = Array.from(current.classList).find((className) =>
-        className.startsWith(EVENT_TOKEN_CLASS_PREFIX),
-      );
-
-      if (tokenClass) {
-        const token = tokenClass.slice(EVENT_TOKEN_CLASS_PREFIX.length);
-        const eventId = schedulerEventIdByToken.get(token);
-        if (eventId) {
-          event.preventDefault();
-          event.stopPropagation();
-          onSelectEvent(eventId);
-        }
-        return;
-      }
-
-      current = current.parentElement;
+    const eventId = getEventIdFromTarget(target);
+    if (eventId) {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectEvent(eventId);
+      return;
     }
 
     if (target.closest(".MuiEventCalendar-sidePanel")) {
+      return;
+    }
+
+    if (
+      target.closest(
+        "button, a, input, textarea, select, [role='button'], [aria-haspopup='menu']",
+      )
+    ) {
+      return;
+    }
+  };
+
+  const handleSchedulerDoubleClickCapture = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const container = target.closest(".MuiEventCalendar-root");
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+
+    if (target.closest(".MuiEventCalendar-headerToolbar")) {
+      return;
+    }
+
+    if (target.closest(".MuiEventCalendar-sidePanel")) {
+      return;
+    }
+
+    const eventId = getEventIdFromTarget(target);
+    if (eventId) {
+      event.preventDefault();
+      event.stopPropagation();
+      onSelectEvent(eventId);
+      onOpenEventDetail(eventId);
       return;
     }
 
@@ -489,6 +557,7 @@ export function TransportServicesCalendar({
       setIsSchedulerSidePanelOpen((current) => {
         if (current && !nextOpen) {
           setSelectedVolunteerIds([]);
+          setIncludeEventsWithoutVolunteers(false);
         }
 
         return nextOpen;
@@ -561,13 +630,29 @@ export function TransportServicesCalendar({
               pt: 1.25,
             }}
           >
-            <Typography variant="sectionEyebrow" sx={{ fontSize: 11, mb: 1 }}>
+            <Typography
+              variant="sectionEyebrow"
+              sx={{ fontSize: 11, mb: 1, paddingLeft: 0.5 }}
+            >
               Volontari
             </Typography>
-            {volunteerOptions.length > 0 ? (
-              <Stack spacing={1}>
-                <FormGroup>
-                  {volunteerOptions.map((option) => (
+            <Stack spacing={1}>
+              <FormGroup>
+                <FormControlLabel
+                  sx={{ m: 0, py: 0.15 }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={includeEventsWithoutVolunteers}
+                      onChange={(_, checked) => {
+                        setIncludeEventsWithoutVolunteers(checked);
+                      }}
+                    />
+                  }
+                  label="Nessun volontario"
+                />
+                {volunteerOptions.length > 0 ? (
+                  volunteerOptions.map((option) => (
                     <FormControlLabel
                       key={option.id}
                       sx={{ m: 0, py: 0.15 }}
@@ -588,26 +673,38 @@ export function TransportServicesCalendar({
                       }
                       label={option.label}
                     />
-                  ))}
-                </FormGroup>
+                  ))
+                ) : (
+                  <Typography
+                    variant="bodySmall"
+                    color="text.secondary"
+                    sx={{ pl: 0.5, pt: 0.5 }}
+                  >
+                    Nessun volontario nel periodo visibile.
+                  </Typography>
+                )}
+              </FormGroup>
 
-                {selectedVolunteerIds.length > 0 &&
-                filteredRenderableEvents.length === 0 ? (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="bodySmall" color="text.secondary">
-                      Nessun servizio nel periodo con il filtro corrente.
-                    </Typography>
-                    <Button
-                      color="inherit"
-                      size="small"
-                      onClick={() => setSelectedVolunteerIds([])}
-                    >
-                      Azzera
-                    </Button>
-                  </Stack>
-                ) : null}
-              </Stack>
-            ) : null}
+              {(selectedVolunteerIds.length > 0 ||
+                includeEventsWithoutVolunteers) &&
+              filteredRenderableEvents.length === 0 ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="bodySmall" color="text.secondary">
+                    Nessun servizio nel periodo con il filtro corrente.
+                  </Typography>
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setSelectedVolunteerIds([]);
+                      setIncludeEventsWithoutVolunteers(false);
+                    }}
+                  >
+                    Azzera
+                  </Button>
+                </Stack>
+              ) : null}
+            </Stack>
           </Box>,
           schedulerSidePanelAnchorElement,
         )
@@ -640,6 +737,7 @@ export function TransportServicesCalendar({
             <Box
               ref={calendarHostRef}
               onClickCapture={handleSchedulerClickCapture}
+              onDoubleClickCapture={handleSchedulerDoubleClickCapture}
               sx={{
                 border: "1px solid",
                 borderColor: "divider",

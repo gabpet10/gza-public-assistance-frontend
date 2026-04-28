@@ -85,6 +85,38 @@ function formatDateTime(value: string | null) {
   });
 }
 
+function formatPlannedWindow(
+  startValue: string | null,
+  endValue: string | null,
+) {
+  const startLabel = formatDateTime(startValue);
+  if (startLabel === "-") {
+    return "-";
+  }
+
+  if (!endValue) {
+    return `${startLabel} · fine non impostata`;
+  }
+
+  const parsedStart = startValue ? new Date(startValue) : null;
+  const parsedEnd = new Date(endValue);
+  if (
+    parsedStart &&
+    !Number.isNaN(parsedStart.getTime()) &&
+    !Number.isNaN(parsedEnd.getTime()) &&
+    parsedStart.toDateString() === parsedEnd.toDateString()
+  ) {
+    const endTime = parsedEnd.toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return `${startLabel} - ${endTime}`;
+  }
+
+  return `${startLabel} - ${formatDateTime(endValue)}`;
+}
+
 function getDestinationLabel(service: TransportService) {
   return [service.dropoffAddress, service.dropoffCity, service.dropoffProvince]
     .filter(Boolean)
@@ -487,7 +519,10 @@ export function TransportServiceDetailPanel({
                           variant="bodyMedium"
                           sx={{ fontWeight: 500 }}
                         >
-                          {formatDateTime(service.scheduledAt)}
+                          {formatPlannedWindow(
+                            service.scheduledAt,
+                            service.scheduledEnd,
+                          )}
                         </Typography>
                       </div>
                       <div className="grid grid-cols-[170px,1fr] items-start gap-4 px-4 py-3">
