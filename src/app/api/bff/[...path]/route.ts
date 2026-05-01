@@ -37,11 +37,11 @@ async function handleProxy(request: NextRequest, context: RouteContext) {
   );
 
   const headers = new Headers();
-  const contentType = request.headers.get("content-type");
+  const requestContentType = request.headers.get("content-type");
   const accept = request.headers.get("accept");
 
-  if (contentType) {
-    headers.set("content-type", contentType);
+  if (requestContentType) {
+    headers.set("content-type", requestContentType);
   }
 
   if (accept) {

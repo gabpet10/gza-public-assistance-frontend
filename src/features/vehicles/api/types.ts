@@ -39,8 +39,9 @@ export type Vehicle = {
   id: string;
   organizationId: string;
   plateNumber: string;
-  type: VehicleTypeValue | null;
-  description: string | null;
+  type: VehicleTypeValue;
+  description: string;
+  note: string;
   createdAt: string;
 };
 

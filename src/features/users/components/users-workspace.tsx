@@ -2,39 +2,36 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  AdminPanelSettings,
   Add,
+  Badge,
   DeleteOutline,
   Edit,
   Group,
   ToggleOff,
   ToggleOn,
-  VisibilityOutlined,
+  VolunteerActivism,
 } from "@mui/icons-material";
 import {
-  Alert,
   Box,
   Button,
   Chip,
-  Drawer,
-  IconButton,
   Stack,
-  Tooltip,
   Typography,
+  type SvgIconProps,
 } from "@mui/material";
 import {
   DataGrid,
   type GridColDef,
-  type GridPaginationModel,
   type GridRowParams,
-  type GridSortModel,
 } from "@mui/x-data-grid";
 import { toApiUiError } from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
-import { useDebouncedValue } from "@/shared/hooks/use-debounced-value";
+import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import {
+  createUser,
   createUserForOrganization,
   deleteUserFromOrganization,
-  getUserById,
   searchUsers,
   toUserActiveFilter,
   updateUser,
@@ -44,19 +41,18 @@ import type {
   UserFormData,
   UserStatusFilter,
 } from "@/features/users/api/types";
+import { toUserTypeLabel, userTypeOptions } from "@/features/users/api/types";
+import { getEffectiveRoleFromSession } from "@/core/auth/roles";
 import { UserFormDialog } from "@/features/users/components/user-form-dialog";
 import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
 import { ContentCard } from "@/shared/ui/content-card";
 import {
   getWorkspaceGridRowClassName,
   organizationsEnterpriseDataGridSx,
-  workspaceDetailActionButtonSx,
-  workspaceDetailActionIconSx,
 } from "@/shared/ui/data-grid/workspace-data-grid-styles";
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
-  workspaceDetailCloseButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -67,31 +63,65 @@ const statusOptions = [
   { value: "inactive", label: "Non attivi" },
 ] as const;
 
+function getUserTypeIcon(type: string | null | undefined) {
+  const iconProps: SvgIconProps = {
+    fontSize: "small",
+    sx: { color: "var(--accent-secondary)" },
+  };
+
+  if (type === "admin") {
+    return <AdminPanelSettings {...iconProps} />;
+  }
+
+  if (type === "volunteer") {
+    return <VolunteerActivism {...iconProps} />;
+  }
+
+  return <Badge {...iconProps} />;
+}
+
 export function UsersWorkspace() {
   const { session } = useAuth();
+  const effectiveRole = getEffectiveRoleFromSession(session);
   const scopedOrganizationId =
     session?.activeOrganizationId ??
     session?.memberships?.[0]?.organizationId ??
     undefined;
-  const [searchText, setSearchText] = useState("");
-  const debouncedSearchText = useDebouncedValue(searchText, 420);
+  const isSuperUserGlobalMode = effectiveRole === "SUPER_USER";
+  const organizationVisibleUserTypes = useMemo(
+    () => userTypeOptions.filter((option) => option.value !== "admin"),
+    [],
+  );
+  const allowedCreateUserTypeOptions = useMemo(() => {
+    if (isSuperUserGlobalMode) {
+      return userTypeOptions.filter((option) => option.value === "admin");
+    }
+
+    return organizationVisibleUserTypes;
+  }, [isSuperUserGlobalMode, organizationVisibleUserTypes]);
+  const allowedEditUserTypeOptions = useMemo(() => {
+    if (isSuperUserGlobalMode) {
+      return userTypeOptions.filter((option) => option.value === "admin");
+    }
+
+    return organizationVisibleUserTypes;
+  }, [isSuperUserGlobalMode, organizationVisibleUserTypes]);
+  const {
+    searchText,
+    debouncedSearchText,
+    paginationModel,
+    sortModel,
+    setSearchText,
+    setPaginationModel,
+    handlePaginationModelChange,
+    handleSortModelChange,
+  } = useServerGridState();
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 10,
-  });
-  const [sortModel, setSortModel] = useState<GridSortModel>([
-    { field: "createdAt", sort: "desc" },
-  ]);
   const [data, setData] = useState<User[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [openedUserId, setOpenedUserId] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -104,11 +134,6 @@ export function UsersWorkspace() {
   );
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const openUserDetail = (userId: string) => {
-    setSelectedUserId(userId);
-    setOpenedUserId(userId);
-  };
-
   const handleRowClick = (params: GridRowParams<User>) => {
     setSelectedUserId((current) =>
       current === params.row.id ? null : params.row.id,
@@ -117,29 +142,6 @@ export function UsersWorkspace() {
 
   const gridColumns = useMemo<GridColDef<User>[]>(
     () => [
-      {
-        field: "actions",
-        headerName: "Dettaglio",
-        width: 84,
-        sortable: false,
-        filterable: false,
-        disableColumnMenu: true,
-        align: "center",
-        renderCell: (params) => (
-          <Tooltip title="Apri dettaglio">
-            <IconButton
-              size="small"
-              sx={workspaceDetailActionButtonSx}
-              onClick={(event) => {
-                event.stopPropagation();
-                openUserDetail(params.row.id);
-              }}
-            >
-              <VisibilityOutlined sx={workspaceDetailActionIconSx} />
-            </IconButton>
-          </Tooltip>
-        ),
-      },
       { field: "email", headerName: "Email", flex: 1.2, minWidth: 220 },
       {
         field: "firstName",
@@ -162,6 +164,18 @@ export function UsersWorkspace() {
         minWidth: 150,
         sortable: false,
         valueGetter: (_, row) => row.phone || "-",
+      },
+      {
+        field: "userType",
+        headerName: "Tipo",
+        flex: 0.8,
+        minWidth: 140,
+        renderCell: (params) => (
+          <Stack direction="row" spacing={1} alignItems="center">
+            {getUserTypeIcon(params.row.userType)}
+            <span>{toUserTypeLabel(params.row.userType)}</span>
+          </Stack>
+        ),
       },
       {
         field: "isActive",
@@ -197,11 +211,7 @@ export function UsersWorkspace() {
   }, [data, selectedUserId]);
 
   const selectedUserFormValues = useMemo<UserFormData | undefined>(() => {
-    const source =
-      selectedRow ??
-      (selectedUser?.id && selectedUser.id === selectedUserId
-        ? selectedUser
-        : null);
+    const source = selectedRow;
     if (!source) {
       return undefined;
     }
@@ -209,12 +219,13 @@ export function UsersWorkspace() {
     return {
       email: source.email,
       password: "",
-      firstName: source.firstName ?? "",
-      lastName: source.lastName ?? "",
+      firstName: source.firstName,
+      lastName: source.lastName,
       phone: source.phone ?? "",
       isActive: source.isActive,
+      userType: source.userType,
     };
-  }, [selectedRow, selectedUser, selectedUserId]);
+  }, [selectedRow]);
 
   useEffect(() => {
     if (!session) {
@@ -227,13 +238,6 @@ export function UsersWorkspace() {
       setListError(null);
 
       try {
-        if (!scopedOrganizationId) {
-          setData([]);
-          setTotalCount(0);
-          setListError("Contesto organizzazione non disponibile.");
-          return;
-        }
-
         const sort = sortModel[0];
         const response = await searchUsers({
           pageIndex: paginationModel.page,
@@ -242,7 +246,12 @@ export function UsersWorkspace() {
           sortBy: sort?.field,
           sortDescending: sort?.sort === "desc",
           isActive: toUserActiveFilter(statusFilter),
-          organizationId: scopedOrganizationId,
+          organizationId: isSuperUserGlobalMode
+            ? undefined
+            : scopedOrganizationId,
+          userTypes: isSuperUserGlobalMode
+            ? ["admin"]
+            : organizationVisibleUserTypes.map((option) => option.value),
         });
 
         if (!isDisposed) {
@@ -275,57 +284,17 @@ export function UsersWorkspace() {
     paginationModel.pageSize,
     reloadKey,
     scopedOrganizationId,
+    organizationVisibleUserTypes,
+    isSuperUserGlobalMode,
     session,
     sortModel,
     statusFilter,
   ]);
 
-  useEffect(() => {
-    if (!session || !openedUserId) {
-      return;
-    }
-
-    let isDisposed = false;
-    const loadDetail = async () => {
-      setIsDetailLoading(true);
-      setDetailError(null);
-
-      try {
-        const response = await getUserById(openedUserId, scopedOrganizationId);
-        if (!isDisposed) {
-          setSelectedUser(response);
-        }
-      } catch (error) {
-        if (!isDisposed) {
-          const message = toApiUiError(
-            error,
-            "Dettaglio non disponibile.",
-          ).userMessage;
-          setDetailError(message);
-        }
-      } finally {
-        if (!isDisposed) {
-          setIsDetailLoading(false);
-        }
-      }
-    };
-
-    void loadDetail();
-
-    return () => {
-      isDisposed = true;
-    };
-  }, [openedUserId, scopedOrganizationId, session]);
-
-  const selectedUserName =
-    selectedUser?.email ?? selectedRow?.email ?? "utente selezionato";
-  const isSelectedUserActive =
-    selectedUser?.isActive ?? selectedRow?.isActive ?? false;
-  const canEditOrDelete = Boolean(
-    selectedUserId &&
-    ((selectedRow && selectedRow.id === selectedUserId) ||
-      (selectedUser && selectedUser.id === selectedUserId)),
-  );
+  const selectedUserName = selectedRow?.email ?? "utente selezionato";
+  const isSelectedUserActive = selectedRow?.isActive ?? false;
+  const canEditOrDelete = Boolean(selectedUserId && selectedRow);
+  const canDeleteUser = Boolean(canEditOrDelete && scopedOrganizationId);
 
   if (!session) {
     return <LoadingState message="Inizializzazione workspace Users..." />;
@@ -336,11 +305,29 @@ export function UsersWorkspace() {
       return;
     }
 
+    if (isSuperUserGlobalMode) {
+      if (values.userType !== "admin") {
+        throw new Error(
+          "Fuori dal contesto organizzazione puoi creare solo utenti Admin.",
+        );
+      }
+
+      const created = await createUser(values);
+      setReloadKey((current) => current + 1);
+      setSelectedUserId(created.id);
+      return;
+    }
+
     if (!scopedOrganizationId) {
-      setListError(
+      throw new Error(
         "Seleziona una organizzazione prima di creare un nuovo utente.",
       );
-      return;
+    }
+
+    if (values.userType === "admin") {
+      throw new Error(
+        "Nel contesto organizzazione non puoi creare utenti Admin.",
+      );
     }
 
     const created = await createUserForOrganization({
@@ -351,10 +338,10 @@ export function UsersWorkspace() {
       lastName: values.lastName,
       phone: values.phone,
       isActive: values.isActive,
+      userType: values.userType,
     });
     setReloadKey((current) => current + 1);
     setSelectedUserId(created.id);
-    setOpenedUserId(created.id);
   };
 
   const handleEditUser = async (values: UserFormData) => {
@@ -362,8 +349,19 @@ export function UsersWorkspace() {
       return;
     }
 
-    const updated = await updateUser(selectedUserId, values);
-    setSelectedUser(updated);
+    if (isSuperUserGlobalMode && values.userType !== "admin") {
+      throw new Error(
+        "Fuori dal contesto organizzazione puoi assegnare solo il tipo Admin.",
+      );
+    }
+
+    if (!isSuperUserGlobalMode && values.userType === "admin") {
+      throw new Error(
+        "Nel contesto organizzazione non puoi assegnare il tipo Admin.",
+      );
+    }
+
+    await updateUser(selectedUserId, values);
     setReloadKey((current) => current + 1);
   };
 
@@ -386,10 +384,6 @@ export function UsersWorkspace() {
       await deleteUserFromOrganization(scopedOrganizationId, selectedUserId);
       setIsDeleteDialogOpen(false);
       setSelectedUserId(null);
-      if (openedUserId === selectedUserId) {
-        setOpenedUserId(null);
-      }
-      setSelectedUser(null);
       setReloadKey((current) => current + 1);
     } catch (error) {
       const message = toApiUiError(
@@ -411,12 +405,11 @@ export function UsersWorkspace() {
     setIsUpdatingStatus(true);
 
     try {
-      const updated = await updateUser(selectedUserId, {
+      await updateUser(selectedUserId, {
         ...selectedUserFormValues,
         isActive: !selectedUserFormValues.isActive,
       });
 
-      setSelectedUser(updated);
       setReloadKey((current) => current + 1);
       setIsDeactivateDialogOpen(false);
     } catch (error) {
@@ -489,7 +482,7 @@ export function UsersWorkspace() {
               variant="contained"
               color="error"
               startIcon={<DeleteOutline />}
-              disabled={!canEditOrDelete}
+              disabled={!canDeleteUser}
               onClick={() => setIsDeleteDialogOpen(true)}
             >
               Elimina
@@ -503,10 +496,7 @@ export function UsersWorkspace() {
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca utente per email, nome o telefono"
-            onSearchTextChange={(value) => {
-              setSearchText(value);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            onSearchTextChange={setSearchText}
             filters={[
               {
                 key: "status",
@@ -545,9 +535,9 @@ export function UsersWorkspace() {
                 rowCount={totalCount}
                 pageSizeOptions={[10, 20, 50]}
                 paginationModel={paginationModel}
-                onPaginationModelChange={setPaginationModel}
+                onPaginationModelChange={handlePaginationModelChange}
                 sortModel={sortModel}
-                onSortModelChange={setSortModel}
+                onSortModelChange={handleSortModelChange}
                 loading={isLoading}
                 disableRowSelectionOnClick
                 onRowClick={handleRowClick}
@@ -558,123 +548,10 @@ export function UsersWorkspace() {
         </Stack>
       </ContentCard>
 
-      <Drawer
-        anchor="right"
-        open={Boolean(openedUserId)}
-        onClose={() => setOpenedUserId(null)}
-      >
-        <div className="h-full w-[min(100vw,680px)] bg-[#fffdfa] p-6">
-          <Stack spacing={2.5}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <Typography variant="sectionEyebrow">Dettaglio</Typography>
-                <Typography variant="sectionTitle">
-                  {selectedUser?.email ??
-                    data.find((item) => item.id === openedUserId)?.email ??
-                    "Utente"}
-                </Typography>
-              </div>
-              <Tooltip title="Chiudi">
-                <IconButton
-                  onClick={() => setOpenedUserId(null)}
-                  sx={workspaceDetailCloseButtonSx}
-                >
-                  <VisibilityOutlined fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </div>
-            {isDetailLoading ? (
-              <LoadingState message="Caricamento dettaglio utente..." />
-            ) : null}
-            {detailError ? <Alert severity="error">{detailError}</Alert> : null}
-            {statusActionError ? (
-              <Alert severity="warning">{statusActionError}</Alert>
-            ) : null}
-            {selectedUser ? (
-              <ContentCard className="bg-white p-5">
-                <Stack spacing={2}>
-                  <div className="rounded-2xl border border-[color:var(--border-soft)] bg-[#f2f4f7] p-4">
-                    <Stack spacing={1.5}>
-                      <div className="flex flex-wrap gap-2">
-                        <Chip
-                          icon={<Group />}
-                          label={
-                            selectedUser.isActive ? "Attivo" : "Non attivo"
-                          }
-                          color={selectedUser.isActive ? "success" : "default"}
-                        />
-                      </div>
-                      <Typography variant="bodyMedium">
-                        Nome: {selectedUser.firstName || "-"}
-                      </Typography>
-                      <Typography variant="bodyMedium">
-                        Cognome: {selectedUser.lastName || "-"}
-                      </Typography>
-                      <Typography variant="bodyMedium">
-                        Telefono: {selectedUser.phone || "-"}
-                      </Typography>
-                      <Typography variant="bodyMedium">
-                        Ultimo accesso:{" "}
-                        {selectedUser.lastLoginAt
-                          ? new Intl.DateTimeFormat("it-IT", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            }).format(new Date(selectedUser.lastLoginAt))
-                          : "-"}
-                      </Typography>
-                    </Stack>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="contained"
-                      startIcon={<Edit />}
-                      disabled={!canEditOrDelete}
-                      sx={workspacePrimaryActionButtonSx}
-                      onClick={() => setIsEditDialogOpen(true)}
-                    >
-                      Modifica
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color={selectedUser.isActive ? "warning" : "success"}
-                      startIcon={
-                        selectedUser.isActive ? <ToggleOff /> : <ToggleOn />
-                      }
-                      disabled={!canEditOrDelete}
-                      onClick={() => {
-                        if (selectedUser.isActive) {
-                          setStatusActionError(null);
-                          setIsDeactivateDialogOpen(true);
-                          return;
-                        }
-
-                        void handleToggleUserStatus();
-                      }}
-                    >
-                      {selectedUser.isActive
-                        ? "Disattiva utente"
-                        : "Riattiva utente"}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      startIcon={<DeleteOutline />}
-                      disabled={!canEditOrDelete}
-                      onClick={() => setIsDeleteDialogOpen(true)}
-                    >
-                      Elimina
-                    </Button>
-                  </div>
-                </Stack>
-              </ContentCard>
-            ) : null}
-          </Stack>
-        </div>
-      </Drawer>
-
       <UserFormDialog
         open={isCreateDialogOpen}
         mode="create"
+        allowedUserTypes={allowedCreateUserTypeOptions}
         onClose={() => setIsCreateDialogOpen(false)}
         onSubmit={handleCreateUser}
       />
@@ -683,6 +560,7 @@ export function UsersWorkspace() {
         open={isEditDialogOpen}
         mode="edit"
         initialValues={selectedUserFormValues}
+        allowedUserTypes={allowedEditUserTypeOptions}
         onClose={() => setIsEditDialogOpen(false)}
         onSubmit={handleEditUser}
       />

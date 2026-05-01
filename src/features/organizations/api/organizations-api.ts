@@ -18,6 +18,14 @@ type SearchOrganizationsInput = QueryParameters & {
   region?: string;
 };
 
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid organizations payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
+
 export function toOrganizationActiveFilter(filter: OrganizationStatusFilter) {
   if (filter === "active") {
     return true;
@@ -32,15 +40,15 @@ export function toOrganizationActiveFilter(filter: OrganizationStatusFilter) {
 
 function toOrganizationModel(dto: OrganizationDto): Organization {
   return {
-    id: dto.id ?? "",
-    name: dto.name ?? "",
+    id: requireField(dto.id, "organization.id"),
+    name: requireField(dto.name, "organization.name"),
     logo: dto.logo ?? null,
-    vatNumber: dto.vatNumber ?? null,
-    address: dto.address ?? null,
-    city: dto.city ?? null,
-    region: dto.region ?? null,
-    isActive: dto.isActive ?? false,
-    createdAt: dto.createdAt ?? "",
+    vatNumber: requireField(dto.vatNumber, "organization.vatNumber"),
+    address: requireField(dto.address, "organization.address"),
+    city: requireField(dto.city, "organization.city"),
+    region: requireField(dto.region, "organization.region"),
+    isActive: requireField(dto.isActive, "organization.isActive"),
+    createdAt: requireField(dto.createdAt, "organization.createdAt"),
   };
 }
 
@@ -62,22 +70,21 @@ function toOnboardingPayload(
   input: OrganizationFormData,
 ): OrganizationOnboardingRequestDto {
   return {
-    OrganizationName: toNullableTrimmed(input.name),
-    OrganizationLogo: toNullableTrimmed(input.logo),
-    OrganizationVatNumber: toNullableTrimmed(input.vatNumber),
-    OrganizationAddress: toNullableTrimmed(input.address),
-    OrganizationCity: toNullableTrimmed(input.city),
-    OrganizationRegion: toNullableTrimmed(input.region),
-    OrganizationIsActive: input.isActive,
-    UserEmail: toNullableTrimmed(input.operatorEmail),
-    UserPassword: toNullableTrimmed(input.operatorPassword),
-    UserFirstName: toNullableTrimmed(input.operatorFirstName),
-    UserLastName: toNullableTrimmed(input.operatorLastName),
-    UserPhone: toNullableTrimmed(input.operatorPhone),
-    UserIsActive: true,
-    UserType: "operator",
-    MembershipStatus: "active",
-    MembershipJoinedAt: null,
+    organizationName: toNullableTrimmed(input.name),
+    organizationLogo: toNullableTrimmed(input.logo),
+    organizationVatNumber: toNullableTrimmed(input.vatNumber),
+    organizationAddress: toNullableTrimmed(input.address),
+    organizationCity: toNullableTrimmed(input.city),
+    organizationRegion: toNullableTrimmed(input.region),
+    organizationIsActive: input.isActive,
+    userEmail: toNullableTrimmed(input.operatorEmail),
+    userPassword: toNullableTrimmed(input.operatorPassword),
+    userFirstName: toNullableTrimmed(input.operatorFirstName),
+    userLastName: toNullableTrimmed(input.operatorLastName),
+    userIsActive: true,
+    userType: "operator",
+    membershipStatus: "active",
+    membershipJoinedAt: null,
   };
 }
 
@@ -116,17 +123,11 @@ export async function createOrganization(input: OrganizationFormData) {
     },
   );
 
-  const wrappedResponse = response as { organization?: OrganizationDto | null };
-
-  if (wrappedResponse.organization) {
-    return toOrganizationModel(wrappedResponse.organization);
-  }
-
-  if ("organization" in wrappedResponse) {
-    throw new Error("Risposta onboarding organizzazione non valida.");
-  }
-
-  return toOrganizationModel(response as OrganizationDto);
+  const organizationId = requireField(
+    response.organizationId,
+    "onboarding.organizationId",
+  );
+  return getOrganizationById(organizationId);
 }
 
 export async function updateOrganization(

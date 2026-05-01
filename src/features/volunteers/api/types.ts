@@ -24,6 +24,11 @@ export type VolunteerListItem = {
   fullName: string;
   phone: string;
   fiscalCode: string;
+  userId: string | null;
+  userEmail: string | null;
+  userFirstName: string | null;
+  userLastName: string | null;
+  userIsActive: boolean | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -36,8 +41,33 @@ export type VolunteerListItemDto = {
   fullName?: string;
   phone?: string;
   fiscalCode?: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
+  userIsActive?: boolean | null;
   isActive?: boolean;
   createdAt?: string;
+};
+
+export type VolunteerUserLinkInput = {
+  userId: string;
+};
+
+export type VolunteerUserLinkRequestDto = {
+  userId?: string | null;
+};
+
+export type VolunteerUserLinkResponseDto = {
+  volunteerId?: string;
+  userId?: string;
+  linkedAt?: string;
+};
+
+export type VolunteerUserLinkResponse = {
+  volunteerId: string;
+  userId: string;
+  linkedAt: string;
 };
 
 export type Volunteer = VolunteerListItem & {

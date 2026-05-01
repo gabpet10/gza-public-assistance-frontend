@@ -17,11 +17,13 @@ export function getProblemMessage(problem?: ProblemDetails) {
     return "La richiesta non e stata completata.";
   }
 
-  const firstValidationMessage = problem.errors
-    ? Object.values(problem.errors).flat()[0]
+  const validationErrors = problem.errors ?? problem.extensions?.errors;
+  const firstValidationMessage = validationErrors
+    ? Object.values(validationErrors).flat()[0]
     : undefined;
   return (
     problem.additionalInfo ??
+    problem.extensions?.additionalInfo ??
     problem.detail ??
     firstValidationMessage ??
     problem.title ??
@@ -57,9 +59,13 @@ export function toApiUiError(
 ): ApiUiError {
   const fieldErrors =
     error instanceof ApiError
-      ? (error.problem?.errors ?? {})
+      ? ((error.problem?.errors ??
+          error.problem?.extensions?.errors ??
+          {}) as Record<string, string[]>)
       : error instanceof Error
         ? (((error as Error & { problem?: ProblemDetails }).problem?.errors ??
+            (error as Error & { problem?: ProblemDetails }).problem?.extensions
+              ?.errors ??
             {}) as Record<string, string[]>)
         : {};
   const status =

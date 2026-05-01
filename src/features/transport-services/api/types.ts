@@ -1,4 +1,12 @@
-export type TransportPriority = "routine" | "urgent";
+export type TransportType =
+  | "sanitario"
+  | "sociale"
+  | "dimissione_ospedaliera"
+  | "visita_programmata"
+  | "dialisi"
+  | "riabilitazione"
+  | "trasferimento_struttura"
+  | "accompagnamento_amministrativo";
 
 export type TransportServiceStatus =
   | "pending"
@@ -18,24 +26,25 @@ export type TransportTeamMember = {
 export type TransportServiceVolunteer = {
   volunteerId: string;
   fullName: string;
+  phone: string | null;
   role: TransportAssignmentRole;
 };
 
 export type TransportService = {
   id: string;
   organizationId: string;
+  transportType: TransportType;
   status: TransportServiceStatus;
-  priority: TransportPriority;
   scheduledAt: string;
   scheduledEnd: string | null;
   scheduleVersion: number;
-  clientId: string | null;
-  clientDisplayName: string | null;
-  pickupDestinationId: string | null;
-  pickupDestinationDisplayName: string | null;
-  dropoffAddress: string | null;
-  dropoffCity: string | null;
-  dropoffProvince: string | null;
+  clientId: string;
+  clientDisplayName: string;
+  pickupDestinationId: string;
+  pickupDestinationDisplayName: string;
+  dropoffAddress: string;
+  dropoffCity: string;
+  dropoffProvince: string;
   note: string | null;
   isPaid: boolean;
   amount: number | null;
@@ -63,18 +72,17 @@ export type TransportService = {
 export type TransportServiceVolunteerDto = {
   volunteerId?: string;
   fullName?: string;
+  phone?: string | null;
   role?: string;
 };
 
 export type TransportServiceDto = {
   id?: string;
   organizationId?: string;
+  transportType?: string;
   status?: string;
-  priority?: string;
   scheduledAt?: string;
   scheduledEnd?: string | null;
-  // Legacy fallbacks still accepted.
-  scheduledEndAt?: string | null;
   scheduleVersion?: number;
   clientId?: string | null;
   clientFirstName?: string | null;
@@ -110,10 +118,7 @@ export type TransportServiceDto = {
   completedAt?: string | null;
   cancelledAt?: string | null;
 
-  // Legacy fallback fields still accepted while backend evolves.
   title?: string;
-  startUtc?: string;
-  endUtc?: string;
   teamMemberCount?: number;
   createdAt?: string;
 };
@@ -131,6 +136,7 @@ export type TransportServicePagedResultDto = {
 export type TransportCalendarEvent = {
   id: string;
   organizationId: string;
+  transportType: TransportType;
   clientId: string;
   clientFirstName: string | null;
   clientLastName: string | null;
@@ -159,7 +165,6 @@ export type TransportCalendarEvent = {
   scheduledEnd: string | null;
   scheduleVersion: number;
   status: TransportServiceStatus;
-  priority: TransportPriority;
   note: string | null;
   isPaid: boolean;
   amount: number | null;
@@ -183,6 +188,7 @@ export type TransportCalendarEvent = {
 export type TransportCalendarEventDto = {
   id?: string;
   organizationId?: string;
+  transportType?: string;
   clientId?: string;
   clientFirstName?: string | null;
   clientLastName?: string | null;
@@ -209,13 +215,8 @@ export type TransportCalendarEventDto = {
   title?: string;
   scheduledAt?: string;
   scheduledEnd?: string | null;
-  // Legacy fallbacks still accepted.
-  startUtc?: string;
-  endUtc?: string | null;
-  scheduledEndUtc?: string | null;
   scheduleVersion?: number;
   status?: string;
-  priority?: string;
   note?: string | null;
   isPaid?: boolean;
   amount?: number | null;
@@ -240,12 +241,12 @@ export type TransportServiceUpsertInput = {
   organizationId: string;
   clientId: string;
   pickupDestinationId: string;
+  transportType: TransportType;
   scheduledAt: string;
   scheduledEnd?: string | null;
   dropoffAddress: string;
   dropoffCity: string;
   dropoffProvince: string;
-  priority: TransportPriority;
   isPaid: boolean;
   amount?: number | null;
   note?: string;
@@ -256,6 +257,7 @@ export type TransportServiceFormData = {
   clientLabel: string;
   pickupDestinationId: string;
   pickupDestinationLabel: string;
+  transportType: TransportType;
   scheduledAt: string;
   scheduledEnd: string | null;
   serviceStatus: TransportServiceStatus;
@@ -268,7 +270,6 @@ export type TransportServiceFormData = {
   volunteerIds: string[];
   volunteerLabels: string[];
   volunteerRoles: TransportAssignmentRole[];
-  priority: TransportPriority;
   isPaid: boolean;
   amount: number | null;
   note: string;
@@ -278,12 +279,12 @@ export type TransportServiceUpsertRequestDto = {
   organizationId?: string | null;
   clientId?: string | null;
   pickupDestinationId?: string | null;
+  transportType?: string | null;
   scheduledAt?: string | null;
   scheduledEnd?: string | null;
   dropoffAddress?: string | null;
   dropoffCity?: string | null;
   dropoffProvince?: string | null;
-  priority?: string | null;
   isPaid?: boolean | null;
   amount?: number | null;
   note?: string | null;
@@ -308,12 +309,34 @@ export type AssignTransportServiceRequestDto = {
   assignedAt?: string | null;
 };
 
+export type SelfAssignTransportServiceInput = {
+  role?: TransportAssignmentRole;
+  assignedAt?: string;
+};
+
+export type SelfAssignTransportServiceRequestDto = {
+  role?: string | null;
+  assignedAt?: string | null;
+};
+
+export type AssignVehicleAsVolunteerInput = {
+  vehicleId: string;
+  note?: string;
+  changedAt?: string;
+};
+
+export type AssignVehicleAsVolunteerRequestDto = {
+  vehicleId?: string | null;
+  note?: string | null;
+  changedAt?: string | null;
+};
+
 export type RescheduleTransportServiceInput = {
   scheduledAt: string;
 };
 
 export type RescheduleTransportServiceRequestDto = {
-  scheduledAt?: string | null;
+  scheduledAtUtc?: string | null;
 };
 
 export type UpdateTransportServiceScheduleInput = {
@@ -324,8 +347,8 @@ export type UpdateTransportServiceScheduleInput = {
 };
 
 export type UpdateTransportServiceScheduleRequestDto = {
-  scheduledAt?: string | null;
-  scheduledEnd?: string | null;
+  startUtc?: string | null;
+  endUtc?: string | null;
   timezone?: string | null;
   expectedVersion?: number | null;
 };

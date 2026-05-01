@@ -14,6 +14,14 @@ type SearchDestinationsInput = QueryParameters & {
   organizationId?: string;
 };
 
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid destinations payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
+
 function toPayload(input: DestinationFormData): DestinationUpsertRequestDto {
   return {
     organizationId: toNullableTrimmed(input.organizationId),
@@ -28,15 +36,18 @@ function toPayload(input: DestinationFormData): DestinationUpsertRequestDto {
 
 function toDestinationModel(dto: DestinationDto): Destination {
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
-    name: dto.name ?? "",
-    description: dto.description ?? null,
-    address: dto.address ?? null,
-    city: dto.city ?? null,
-    province: dto.province ?? null,
-    notes: dto.notes ?? null,
-    createdAt: dto.createdAt ?? "",
+    id: requireField(dto.id, "destination.id"),
+    organizationId: requireField(
+      dto.organizationId,
+      "destination.organizationId",
+    ),
+    name: requireField(dto.name, "destination.name"),
+    description: requireField(dto.description, "destination.description"),
+    address: requireField(dto.address, "destination.address"),
+    city: requireField(dto.city, "destination.city"),
+    province: requireField(dto.province, "destination.province"),
+    notes: requireField(dto.notes, "destination.notes"),
+    createdAt: requireField(dto.createdAt, "destination.createdAt"),
   };
 }
 

@@ -42,10 +42,13 @@ export function toUserRole(
   if (
     normalizedRole === "ORG_ADMIN" ||
     normalizedRole === "ORGADMIN" ||
-    normalizedRole === "OPERATOR" ||
     normalizedRole === "ORGANIZATION_ADMIN" ||
     normalizedRole === "ORGANIZATIONADMIN"
   ) {
+    return "ORG_ADMIN";
+  }
+
+  if (normalizedRole === "OPERATOR") {
     return "ORG_ADMIN";
   }
 
@@ -96,7 +99,6 @@ export function getEffectiveRoleFromSession(
     return undefined;
   }
 
-  // In organization context, platform admins operate with operator permissions.
   if (primaryRole === "SUPER_USER" && session?.activeOrganizationId) {
     return "ORG_ADMIN";
   }
@@ -122,7 +124,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Utenti",
     path: "/users",
     iconKey: "Group",
-    roles: ["ORG_ADMIN"],
+    roles: ["SUPER_USER", "ORG_ADMIN"],
   },
   {
     label: "Volontari",
@@ -152,7 +154,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Trasporti-sociali",
     path: "/transport-services",
     iconKey: "LocalShipping",
-    roles: ["ORG_ADMIN"],
+    roles: ["ORG_ADMIN", "VOLUNTEER"],
   },
   {
     label: "Le mie attivita",

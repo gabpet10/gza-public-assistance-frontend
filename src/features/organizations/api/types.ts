@@ -2,10 +2,10 @@ export type Organization = {
   id: string;
   name: string;
   logo: string | null;
-  vatNumber: string | null;
-  address: string | null;
-  city: string | null;
-  region: string | null;
+  vatNumber: string;
+  address: string;
+  city: string;
+  region: string;
   isActive: boolean;
   createdAt: string;
 };
@@ -43,27 +43,30 @@ export type OrganizationUpsertRequestDto = {
 };
 
 export type OrganizationOnboardingRequestDto = {
-  OrganizationName?: string | null;
-  OrganizationLogo?: string | null;
-  OrganizationVatNumber?: string | null;
-  OrganizationAddress?: string | null;
-  OrganizationCity?: string | null;
-  OrganizationRegion?: string | null;
-  OrganizationIsActive?: boolean;
-  UserEmail?: string | null;
-  UserPassword?: string | null;
-  UserFirstName?: string | null;
-  UserLastName?: string | null;
-  UserPhone?: string | null;
-  UserIsActive?: boolean;
-  UserType?: string | null;
-  MembershipStatus?: string | null;
-  MembershipJoinedAt?: string | null;
+  organizationName?: string | null;
+  organizationLogo?: string | null;
+  organizationVatNumber?: string | null;
+  organizationAddress?: string | null;
+  organizationCity?: string | null;
+  organizationRegion?: string | null;
+  organizationIsActive?: boolean;
+  userEmail?: string | null;
+  userPassword?: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
+  userIsActive?: boolean;
+  userType?: string | null;
+  membershipStatus?: string | null;
+  membershipJoinedAt?: string | null;
 };
 
-export type OrganizationOnboardingResponseDto =
-  | OrganizationDto
-  | { organization?: OrganizationDto | null };
+export type OrganizationOnboardingResponseDto = {
+  organizationId?: string;
+  userId?: string;
+  organizationMembershipId?: string;
+  userType?: string;
+  membershipStatus?: string;
+};
 
 export type OrganizationFormData = {
   name: string;

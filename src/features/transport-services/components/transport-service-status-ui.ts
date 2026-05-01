@@ -1,7 +1,7 @@
 import type { SxProps, Theme } from "@mui/material/styles";
 import type {
-  TransportPriority,
   TransportServiceStatus,
+  TransportType,
 } from "@/features/transport-services/api/types";
 
 type TransportStatusUi = {
@@ -11,11 +11,15 @@ type TransportStatusUi = {
   textColor: string;
 };
 
-type TransportPriorityUi = {
-  label: string;
-  bgColor: string;
-  borderColor: string;
-  textColor: string;
+const transportTypeLabels: Record<TransportType, string> = {
+  sanitario: "Sanitario",
+  sociale: "Sociale",
+  dimissione_ospedaliera: "Dimissione ospedaliera",
+  visita_programmata: "Visita programmata",
+  dialisi: "Dialisi",
+  riabilitazione: "Riabilitazione",
+  trasferimento_struttura: "Trasferimento struttura",
+  accompagnamento_amministrativo: "Accompagnamento amministrativo",
 };
 
 const transportStatusUiByStatus: Record<
@@ -60,24 +64,6 @@ const transportStatusUiByStatus: Record<
   },
 };
 
-const transportPriorityUiByPriority: Record<
-  TransportPriority,
-  TransportPriorityUi
-> = {
-  routine: {
-    label: "Ordinaria",
-    bgColor: "#F5F5F5",
-    borderColor: "#D1D1D1",
-    textColor: "#2F2F2F",
-  },
-  urgent: {
-    label: "Urgente",
-    bgColor: "#FFF0F0",
-    borderColor: "#F2A3A3",
-    textColor: "#8F1111",
-  },
-};
-
 export function getTransportStatusUi(
   status: TransportServiceStatus,
 ): TransportStatusUi {
@@ -102,24 +88,6 @@ export function getTransportStatusChipSx(
   };
 }
 
-export function getTransportPriorityUi(
-  priority: TransportPriority,
-): TransportPriorityUi {
-  return transportPriorityUiByPriority[priority];
-}
-
-export function getTransportPriorityLabel(priority: TransportPriority): string {
-  return getTransportPriorityUi(priority).label;
-}
-
-export function getTransportPriorityChipSx(
-  priority: TransportPriority,
-): SxProps<Theme> {
-  const ui = getTransportPriorityUi(priority);
-  return {
-    borderColor: ui.borderColor,
-    backgroundColor: ui.bgColor,
-    color: ui.textColor,
-    fontWeight: 600,
-  };
+export function getTransportTypeLabel(transportType: TransportType): string {
+  return transportTypeLabels[transportType];
 }

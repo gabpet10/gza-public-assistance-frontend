@@ -3,20 +3,24 @@ import { mapPagedResultDto, toNullableTrimmed } from "@/core/api/normalization";
 import { buildQueryString } from "@/core/api/query-string";
 import type { QueryParameters } from "@/core/api/types";
 import type {
+  AssignVehicleAsVolunteerInput,
+  AssignVehicleAsVolunteerRequestDto,
   AssignTransportServiceInput,
   AssignTransportServiceRequestDto,
   RescheduleTransportServiceInput,
   RescheduleTransportServiceRequestDto,
+  SelfAssignTransportServiceInput,
+  SelfAssignTransportServiceRequestDto,
   TransportAssignmentRole,
   TransportCalendarEvent,
   TransportCalendarEventDto,
-  TransportPriority,
   TransportService,
   TransportServiceDto,
   TransportServicePagedResultDto,
   TransportServiceVolunteer,
   TransportServiceVolunteerDto,
   TransportServiceStatus,
+  TransportType,
   TransportServiceUpsertInput,
   TransportServiceUpsertRequestDto,
   UpdateTransportServiceScheduleInput,
@@ -26,7 +30,6 @@ import type {
 type SearchTransportServicesInput = QueryParameters & {
   organizationId?: string;
   status?: TransportServiceStatus;
-  priority?: TransportPriority;
   onlyOpen?: boolean;
   rangeStartUtc?: string;
   rangeEndUtc?: string;
@@ -38,12 +41,19 @@ type CalendarEventsInput = {
   startUtc?: string;
   endUtc?: string;
   status?: TransportServiceStatus;
-  priority?: TransportPriority;
   onlyOpen?: boolean;
   volunteerIds?: string[];
 };
 
-const transportServicesEndpoint = "/api/bff/TransportServices";
+const transportServicesEndpoint = "/api/bff/transport-services";
+
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid transport-services payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
 
 function toTransportAssignmentRole(
   value: string | undefined,
@@ -82,10 +92,13 @@ function toVolunteerNamesArray(
 function toTransportServiceVolunteerModel(
   dto: TransportServiceVolunteerDto,
 ): TransportServiceVolunteer {
+  const role = requireField(dto.role, "volunteer.role");
+
   return {
-    volunteerId: dto.volunteerId ?? "",
-    fullName: dto.fullName?.trim() ?? "",
-    role: toTransportAssignmentRole(dto.role),
+    volunteerId: requireField(dto.volunteerId, "volunteer.volunteerId"),
+    fullName: requireField(dto.fullName, "volunteer.fullName").trim(),
+    phone: dto.phone?.trim() ?? null,
+    role: toTransportAssignmentRole(role),
   };
 }
 
@@ -114,23 +127,45 @@ function normalizeTransportStatus(
     return "cancelled";
   }
 
-  return "pending";
+  throw new Error(
+    `Invalid transport-services payload: unsupported status ${value ?? "(empty)"}`,
+  );
 }
 
-function normalizeTransportPriority(
-  value: string | undefined,
-): TransportPriority {
+function normalizeTransportType(value: string | undefined): TransportType {
   const normalized = value?.trim().toLowerCase() ?? "";
 
-  if (
-    normalized === "urgent" ||
-    normalized === "high" ||
-    normalized === "critical"
-  ) {
-    return "urgent";
+  if (normalized === "sanitario") {
+    return "sanitario";
   }
 
-  return "routine";
+  if (normalized === "dimissione_ospedaliera") {
+    return "dimissione_ospedaliera";
+  }
+
+  if (normalized === "visita_programmata") {
+    return "visita_programmata";
+  }
+
+  if (normalized === "dialisi") {
+    return "dialisi";
+  }
+
+  if (normalized === "riabilitazione") {
+    return "riabilitazione";
+  }
+
+  if (normalized === "trasferimento_struttura") {
+    return "trasferimento_struttura";
+  }
+
+  if (normalized === "accompagnamento_amministrativo") {
+    return "accompagnamento_amministrativo";
+  }
+
+  throw new Error(
+    `Invalid transport-services payload: unsupported transportType ${value ?? "(empty)"}`,
+  );
 }
 
 function toApiTransportStatus(
@@ -144,9 +179,39 @@ function toApiTransportStatus(
 }
 
 function toTransportServiceModel(dto: TransportServiceDto): TransportService {
-  const scheduledAt = dto.scheduledAt ?? dto.startUtc ?? "";
-  const scheduledEnd =
-    dto.scheduledEnd ?? dto.scheduledEndAt ?? dto.endUtc ?? null;
+  const id = requireField(dto.id, "transportService.id");
+  const organizationId = requireField(
+    dto.organizationId,
+    "transportService.organizationId",
+  );
+  const scheduledAt = requireField(
+    dto.scheduledAt,
+    "transportService.scheduledAt",
+  );
+  const scheduleVersion = requireField(
+    dto.scheduleVersion,
+    "transportService.scheduleVersion",
+  );
+  const clientId = requireField(dto.clientId, "transportService.clientId");
+  const pickupDestinationId = requireField(
+    dto.pickupDestinationId,
+    "transportService.pickupDestinationId",
+  );
+  const dropoffAddress = requireField(
+    dto.dropoffAddress,
+    "transportService.dropoffAddress",
+  );
+  const dropoffCity = requireField(
+    dto.dropoffCity,
+    "transportService.dropoffCity",
+  );
+  const dropoffProvince = requireField(
+    dto.dropoffProvince,
+    "transportService.dropoffProvince",
+  );
+  const isPaid = requireField(dto.isPaid, "transportService.isPaid");
+  const createdAt = requireField(dto.createdAt, "transportService.createdAt");
+  const scheduledEnd = dto.scheduledEnd ?? null;
   const mappedVolunteers = (dto.volunteers ?? []).map(
     toTransportServiceVolunteerModel,
   );
@@ -162,6 +227,7 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
     uniqueVolunteerIds.map((volunteerId, index) => ({
       volunteerId,
       fullName: volunteerNames[index] ?? "",
+      phone: null,
       role: index === 0 ? "driver" : "attendant",
     }));
   const volunteers =
@@ -179,8 +245,8 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
     dto.clientDisplayName ??
     dto.clientFullName ??
     toDisplayLabel([dto.clientFirstName, dto.clientLastName]) ??
-    dto.clientId ??
-    null;
+    clientId ??
+    "";
   const pickupDestinationDisplayName =
     dto.pickupDestinationDisplayName ??
     dto.pickupDestinationName ??
@@ -189,8 +255,8 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
       dto.pickupDestinationCity,
       dto.pickupDestinationProvince,
     ]) ??
-    dto.pickupDestinationId ??
-    null;
+    pickupDestinationId ??
+    "";
   const vehicleDisplayName =
     dto.vehicleDisplayName ??
     toDisplayLabel([
@@ -208,22 +274,22 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
   );
 
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
+    id,
+    organizationId,
+    transportType: normalizeTransportType(dto.transportType),
     status: normalizeTransportStatus(dto.status),
-    priority: normalizeTransportPriority(dto.priority),
     scheduledAt,
     scheduledEnd,
-    scheduleVersion: dto.scheduleVersion ?? 0,
-    clientId: dto.clientId ?? null,
+    scheduleVersion,
+    clientId,
     clientDisplayName,
-    pickupDestinationId: dto.pickupDestinationId ?? null,
+    pickupDestinationId,
     pickupDestinationDisplayName,
-    dropoffAddress: dto.dropoffAddress ?? null,
-    dropoffCity: dto.dropoffCity ?? null,
-    dropoffProvince: dto.dropoffProvince ?? null,
+    dropoffAddress,
+    dropoffCity,
+    dropoffProvince,
     note: dto.note ?? null,
-    isPaid: dto.isPaid ?? false,
+    isPaid,
     amount: dto.amount ?? null,
     vehicleId: dto.vehicleId ?? null,
     vehiclePlateNumber: dto.vehiclePlateNumber ?? null,
@@ -241,16 +307,57 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
     startedAt: dto.startedAt ?? null,
     completedAt: dto.completedAt ?? null,
     cancelledAt: dto.cancelledAt ?? null,
-    createdAt: dto.createdAt ?? "",
+    createdAt,
   };
 }
 
 function toTransportCalendarEventModel(
   dto: TransportCalendarEventDto,
 ): TransportCalendarEvent {
-  const scheduledAt = dto.scheduledAt ?? dto.startUtc ?? "";
-  const scheduledEnd =
-    dto.scheduledEnd ?? dto.scheduledEndUtc ?? dto.endUtc ?? null;
+  const id = requireField(dto.id, "calendarEvent.id");
+  const organizationId = requireField(
+    dto.organizationId,
+    "calendarEvent.organizationId",
+  );
+  const clientId = requireField(dto.clientId, "calendarEvent.clientId");
+  const pickupDestinationId = requireField(
+    dto.pickupDestinationId,
+    "calendarEvent.pickupDestinationId",
+  );
+  const dropoffAddress = requireField(
+    dto.dropoffAddress,
+    "calendarEvent.dropoffAddress",
+  );
+  const dropoffCity = requireField(
+    dto.dropoffCity,
+    "calendarEvent.dropoffCity",
+  );
+  const dropoffProvince = requireField(
+    dto.dropoffProvince,
+    "calendarEvent.dropoffProvince",
+  );
+  const title = requireField(dto.title, "calendarEvent.title");
+  const scheduledAt = requireField(
+    dto.scheduledAt,
+    "calendarEvent.scheduledAt",
+  );
+  const scheduledEnd = requireField(
+    dto.scheduledEnd,
+    "calendarEvent.scheduledEnd",
+  );
+  const scheduleVersion = requireField(
+    dto.scheduleVersion,
+    "calendarEvent.scheduleVersion",
+  );
+  const isPaid = requireField(dto.isPaid, "calendarEvent.isPaid");
+  const teamMemberCount = requireField(
+    dto.teamMemberCount,
+    "calendarEvent.teamMemberCount",
+  );
+  const createdAt = requireField(dto.createdAt, "calendarEvent.createdAt");
+  const canMove = requireField(dto.canMove, "calendarEvent.canMove");
+  const canAssign = requireField(dto.canAssign, "calendarEvent.canAssign");
+  const canCancel = requireField(dto.canCancel, "calendarEvent.canCancel");
   const clientDisplayName =
     dto.clientDisplayName ??
     dto.clientFullName ??
@@ -274,12 +381,11 @@ function toTransportCalendarEventModel(
     toTransportServiceVolunteerModel,
   );
 
-  const fallbackTeamCount = volunteers.length;
-
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
-    clientId: dto.clientId ?? "",
+    id,
+    organizationId,
+    transportType: normalizeTransportType(dto.transportType),
+    clientId,
     clientFirstName: dto.clientFirstName ?? null,
     clientLastName: dto.clientLastName ?? null,
     clientFullName: dto.clientFullName ?? null,
@@ -290,7 +396,7 @@ function toTransportCalendarEventModel(
     clientNotes: dto.clientNotes ?? null,
     clientCreatedAt: dto.clientCreatedAt ?? null,
     clientDisplayName,
-    pickupDestinationId: dto.pickupDestinationId ?? "",
+    pickupDestinationId,
     pickupDestinationName: dto.pickupDestinationName ?? null,
     pickupDestinationDescription: dto.pickupDestinationDescription ?? null,
     pickupDestinationAddress: dto.pickupDestinationAddress ?? null,
@@ -299,17 +405,16 @@ function toTransportCalendarEventModel(
     pickupDestinationNotes: dto.pickupDestinationNotes ?? null,
     pickupDestinationCreatedAt: dto.pickupDestinationCreatedAt ?? null,
     pickupDestinationDisplayName,
-    dropoffAddress: dto.dropoffAddress ?? "",
-    dropoffCity: dto.dropoffCity ?? "",
-    dropoffProvince: dto.dropoffProvince ?? "",
-    title: dto.title ?? "",
+    dropoffAddress,
+    dropoffCity,
+    dropoffProvince,
+    title,
     scheduledAt,
     scheduledEnd,
-    scheduleVersion: dto.scheduleVersion ?? 0,
+    scheduleVersion,
     status: normalizeTransportStatus(dto.status),
-    priority: normalizeTransportPriority(dto.priority),
     note: dto.note ?? null,
-    isPaid: dto.isPaid ?? false,
+    isPaid,
     amount: dto.amount ?? null,
     vehicleId: dto.vehicleId ?? null,
     vehiclePlateNumber: dto.vehiclePlateNumber ?? null,
@@ -319,13 +424,13 @@ function toTransportCalendarEventModel(
     vehicleCreatedAt: dto.vehicleCreatedAt ?? null,
     vehicleDisplayName,
     volunteers,
-    teamMemberCount: dto.teamMemberCount ?? fallbackTeamCount,
-    createdAt: dto.createdAt ?? "",
+    teamMemberCount,
+    createdAt,
     assignedAt: dto.assignedAt ?? null,
     cancelledAt: dto.cancelledAt ?? null,
-    canMove: dto.canMove ?? false,
-    canAssign: dto.canAssign ?? false,
-    canCancel: dto.canCancel ?? false,
+    canMove,
+    canAssign,
+    canCancel,
   };
 }
 
@@ -336,12 +441,12 @@ function toUpsertPayload(
     organizationId: toNullableTrimmed(input.organizationId),
     clientId: toNullableTrimmed(input.clientId),
     pickupDestinationId: toNullableTrimmed(input.pickupDestinationId),
+    transportType: toNullableTrimmed(input.transportType),
     scheduledAt: toNullableTrimmed(input.scheduledAt),
     scheduledEnd: toNullableTrimmed(input.scheduledEnd),
     dropoffAddress: toNullableTrimmed(input.dropoffAddress),
     dropoffCity: toNullableTrimmed(input.dropoffCity),
     dropoffProvince: toNullableTrimmed(input.dropoffProvince),
-    priority: toNullableTrimmed(input.priority),
     isPaid: input.isPaid,
     amount: input.isPaid ? (input.amount ?? null) : null,
     note: toNullableTrimmed(input.note),
@@ -363,11 +468,30 @@ function toAssignPayload(
   };
 }
 
+function toSelfAssignPayload(
+  input: SelfAssignTransportServiceInput,
+): SelfAssignTransportServiceRequestDto {
+  return {
+    role: toNullableTrimmed(input.role),
+    assignedAt: toNullableTrimmed(input.assignedAt),
+  };
+}
+
+function toAssignVehicleAsVolunteerPayload(
+  input: AssignVehicleAsVolunteerInput,
+): AssignVehicleAsVolunteerRequestDto {
+  return {
+    vehicleId: toNullableTrimmed(input.vehicleId),
+    note: toNullableTrimmed(input.note),
+    changedAt: toNullableTrimmed(input.changedAt),
+  };
+}
+
 function toReschedulePayload(
   input: RescheduleTransportServiceInput,
 ): RescheduleTransportServiceRequestDto {
   return {
-    scheduledAt: toNullableTrimmed(input.scheduledAt),
+    scheduledAtUtc: toNullableTrimmed(input.scheduledAt),
   };
 }
 
@@ -375,8 +499,8 @@ function toUpdateSchedulePayload(
   input: UpdateTransportServiceScheduleInput,
 ): UpdateTransportServiceScheduleRequestDto {
   return {
-    scheduledAt: toNullableTrimmed(input.scheduledAt),
-    scheduledEnd: toNullableTrimmed(input.scheduledEnd),
+    startUtc: toNullableTrimmed(input.scheduledAt),
+    endUtc: toNullableTrimmed(input.scheduledEnd),
     timezone: toNullableTrimmed(input.timezone),
     expectedVersion:
       typeof input.expectedVersion === "number" ? input.expectedVersion : null,
@@ -460,6 +584,83 @@ export async function assignTransportService(
     {
       method: "POST",
       body: JSON.stringify(toAssignPayload(input)),
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function selfAssignVolunteerToTransportService(
+  id: string,
+  input: SelfAssignTransportServiceInput,
+) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/me/assign`,
+    {
+      method: "POST",
+      body: JSON.stringify(toSelfAssignPayload(input)),
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function selfRemoveVolunteerFromTransportService(id: string) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/me/assign`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function selfAssignVehicleToTransportService(
+  id: string,
+  input: AssignVehicleAsVolunteerInput,
+) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/me/vehicle`,
+    {
+      method: "PUT",
+      body: JSON.stringify(toAssignVehicleAsVolunteerPayload(input)),
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function selfRemoveVehicleFromTransportService(id: string) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/me/vehicle`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function removeVolunteerFromTransportService(
+  id: string,
+  volunteerId: string,
+) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/volunteers/${volunteerId}`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function removeVehicleFromTransportService(id: string) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/vehicle`,
+    {
+      method: "DELETE",
     },
   );
 

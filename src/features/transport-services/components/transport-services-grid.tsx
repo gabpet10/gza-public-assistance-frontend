@@ -1,6 +1,15 @@
-import { VisibilityOutlined } from "@mui/icons-material";
+import {
+  AccessibilityNew,
+  AssignmentInd,
+  Diversity3,
+  Healing,
+  LocalHospital,
+  MedicalInformation,
+  SwapHoriz,
+  VisibilityOutlined,
+} from "@mui/icons-material";
 import { Chip } from "@mui/material";
-import { IconButton, Tooltip } from "@mui/material";
+import { IconButton, Stack, Tooltip } from "@mui/material";
 import {
   DataGrid,
   type GridColDef,
@@ -9,10 +18,9 @@ import {
 import type { GridPaginationModel, GridSortModel } from "@mui/x-data-grid";
 import type { TransportService } from "@/features/transport-services/api/types";
 import {
-  getTransportPriorityChipSx,
-  getTransportPriorityLabel,
   getTransportStatusChipSx,
   getTransportStatusLabel,
+  getTransportTypeLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
 import {
   getWorkspaceGridRowClassName,
@@ -63,6 +71,42 @@ function formatAmount(value: number | null) {
     style: "currency",
     currency: "EUR",
   }).format(value);
+}
+
+function getTransportTypeIcon(
+  transportType: TransportService["transportType"],
+) {
+  const iconSx = { fontSize: 16, color: "var(--accent-secondary)" };
+
+  if (transportType === "sanitario") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "dimissione_ospedaliera") {
+    return <Healing sx={iconSx} />;
+  }
+
+  if (transportType === "visita_programmata") {
+    return <MedicalInformation sx={iconSx} />;
+  }
+
+  if (transportType === "dialisi") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "riabilitazione") {
+    return <AccessibilityNew sx={iconSx} />;
+  }
+
+  if (transportType === "trasferimento_struttura") {
+    return <SwapHoriz sx={iconSx} />;
+  }
+
+  if (transportType === "accompagnamento_amministrativo") {
+    return <AssignmentInd sx={iconSx} />;
+  }
+
+  return <Diversity3 sx={iconSx} />;
 }
 
 export function TransportServicesGrid({
@@ -133,17 +177,15 @@ export function TransportServicesGrid({
       ),
     },
     {
-      field: "priority",
-      headerName: "Priorita",
-      flex: 0.6,
-      minWidth: 120,
+      field: "transportType",
+      headerName: "Tipologia",
+      flex: 0.85,
+      minWidth: 170,
       renderCell: ({ row }) => (
-        <Chip
-          size="small"
-          variant="outlined"
-          label={getTransportPriorityLabel(row.priority)}
-          sx={getTransportPriorityChipSx(row.priority)}
-        />
+        <Stack direction="row" spacing={0.8} alignItems="center">
+          {getTransportTypeIcon(row.transportType)}
+          <span>{getTransportTypeLabel(row.transportType)}</span>
+        </Stack>
       ),
     },
     {

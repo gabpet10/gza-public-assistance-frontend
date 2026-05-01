@@ -17,8 +17,8 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { EventCalendar } from "@mui/x-scheduler";
 import type { TransportCalendarEvent } from "@/features/transport-services/api/types";
 import {
-  getTransportPriorityLabel,
   getTransportStatusLabel,
+  getTransportTypeLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
 import { ContentCard } from "@/shared/ui/content-card";
 
@@ -307,8 +307,8 @@ export function TransportServicesCalendar({
           buildCalendarEventTitle(event),
           `Cliente: ${clientLabel}`,
           `Destinazione: ${destinationLabel}`,
+          `Tipologia: ${getTransportTypeLabel(event.transportType)}`,
           `Stato: ${getTransportStatusLabel(event.status)}`,
-          `Priorita: ${getTransportPriorityLabel(event.priority)}`,
           `Orario: ${formatEventTimeRange(event)}`,
           `Volontari: ${volunteersLabel}`,
         ];
@@ -630,16 +630,36 @@ export function TransportServicesCalendar({
               pt: 1.25,
             }}
           >
-            <Typography
-              variant="sectionEyebrow"
-              sx={{ fontSize: 11, mb: 1, paddingLeft: 0.5 }}
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mb: 1 }}
             >
-              Volontari
-            </Typography>
+              <Typography
+                variant="sectionEyebrow"
+                sx={{ fontSize: 11, paddingLeft: 0.5 }}
+              >
+                Volontari
+              </Typography>
+            </Stack>
             <Stack spacing={1}>
-              <FormGroup>
+              <FormGroup
+                sx={{
+                  px: 0,
+                  py: 0,
+                  maxHeight: 248,
+                  overflowY: "auto",
+                }}
+              >
                 <FormControlLabel
-                  sx={{ m: 0, py: 0.15 }}
+                  sx={{
+                    m: 0,
+                    px: 0.35,
+                    py: 0.25,
+                    borderRadius: 1.25,
+                    "&:hover": { backgroundColor: "rgba(15, 109, 122, 0.08)" },
+                  }}
                   control={
                     <Checkbox
                       size="small"
@@ -655,7 +675,15 @@ export function TransportServicesCalendar({
                   volunteerOptions.map((option) => (
                     <FormControlLabel
                       key={option.id}
-                      sx={{ m: 0, py: 0.15 }}
+                      sx={{
+                        m: 0,
+                        px: 0.35,
+                        py: 0.25,
+                        borderRadius: 1.25,
+                        "&:hover": {
+                          backgroundColor: "rgba(15, 109, 122, 0.08)",
+                        },
+                      }}
                       control={
                         <Checkbox
                           size="small"
@@ -678,7 +706,7 @@ export function TransportServicesCalendar({
                   <Typography
                     variant="bodySmall"
                     color="text.secondary"
-                    sx={{ pl: 0.5, pt: 0.5 }}
+                    sx={{ pl: 0.75, pt: 0.5, pb: 0.5 }}
                   >
                     Nessun volontario nel periodo visibile.
                   </Typography>
@@ -688,7 +716,18 @@ export function TransportServicesCalendar({
               {(selectedVolunteerIds.length > 0 ||
                 includeEventsWithoutVolunteers) &&
               filteredRenderableEvents.length === 0 ? (
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{
+                    borderRadius: 0,
+                    border: "1px dashed rgba(217, 95, 67, 0.38)",
+                    backgroundColor: "rgba(217, 95, 67, 0.07)",
+                    px: 1,
+                    py: 0.75,
+                  }}
+                >
                   <Typography variant="bodySmall" color="text.secondary">
                     Nessun servizio nel periodo con il filtro corrente.
                   </Typography>

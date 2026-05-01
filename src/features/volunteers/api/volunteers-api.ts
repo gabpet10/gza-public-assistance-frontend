@@ -14,6 +14,10 @@ import type {
   VolunteerSkillFormData,
   VolunteerSkillUpdateRequestDto,
   VolunteerSkillUpsertRequestDto,
+  VolunteerUserLinkInput,
+  VolunteerUserLinkRequestDto,
+  VolunteerUserLinkResponse,
+  VolunteerUserLinkResponseDto,
   VolunteerStatusFilter,
   VolunteerUpsertRequestDto,
 } from "@/features/volunteers/api/types";
@@ -24,6 +28,14 @@ type SearchVolunteersInput = QueryParameters & {
   isActive?: boolean;
   organizationId?: string;
 };
+
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid volunteers payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
 
 export function toBackendActiveFilter(filter: VolunteerStatusFilter) {
   if (filter === "active") {
@@ -41,25 +53,33 @@ function toVolunteerListItemModel(
   dto: VolunteerListItemDto,
 ): VolunteerListItem {
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
-    firstName: dto.firstName ?? "",
-    lastName: dto.lastName ?? "",
-    fullName: dto.fullName ?? "",
-    phone: dto.phone ?? "",
-    fiscalCode: dto.fiscalCode ?? "",
-    isActive: dto.isActive ?? false,
-    createdAt: dto.createdAt ?? "",
+    id: requireField(dto.id, "volunteer.id"),
+    organizationId: requireField(
+      dto.organizationId,
+      "volunteer.organizationId",
+    ),
+    firstName: requireField(dto.firstName, "volunteer.firstName"),
+    lastName: requireField(dto.lastName, "volunteer.lastName"),
+    fullName: requireField(dto.fullName, "volunteer.fullName"),
+    phone: requireField(dto.phone, "volunteer.phone"),
+    fiscalCode: requireField(dto.fiscalCode, "volunteer.fiscalCode"),
+    userId: dto.userId ?? null,
+    userEmail: dto.userEmail ?? null,
+    userFirstName: dto.userFirstName ?? null,
+    userLastName: dto.userLastName ?? null,
+    userIsActive: dto.userIsActive ?? null,
+    isActive: requireField(dto.isActive, "volunteer.isActive"),
+    createdAt: requireField(dto.createdAt, "volunteer.createdAt"),
   };
 }
 
 function toVolunteerSkillModel(dto: VolunteerSkillDto): VolunteerSkill {
   return {
-    id: dto.id ?? "",
-    volunteerId: dto.volunteerId ?? "",
-    skillType: dto.skillType ?? "",
-    level: dto.level ?? "",
-    verified: dto.verified ?? false,
+    id: requireField(dto.id, "volunteerSkill.id"),
+    volunteerId: requireField(dto.volunteerId, "volunteerSkill.volunteerId"),
+    skillType: requireField(dto.skillType, "volunteerSkill.skillType"),
+    level: requireField(dto.level, "volunteerSkill.level"),
+    verified: requireField(dto.verified, "volunteerSkill.verified"),
   };
 }
 
@@ -100,6 +120,24 @@ function toPayload(input: VolunteerFormData): VolunteerUpsertRequestDto {
   };
 }
 
+function toVolunteerUserLinkPayload(
+  input: VolunteerUserLinkInput,
+): VolunteerUserLinkRequestDto {
+  return {
+    userId: toNullableTrimmed(input.userId),
+  };
+}
+
+function toVolunteerUserLinkResponse(
+  dto: VolunteerUserLinkResponseDto,
+): VolunteerUserLinkResponse {
+  return {
+    volunteerId: requireField(dto.volunteerId, "volunteerUserLink.volunteerId"),
+    userId: requireField(dto.userId, "volunteerUserLink.userId"),
+    linkedAt: requireField(dto.linkedAt, "volunteerUserLink.linkedAt"),
+  };
+}
+
 export async function createVolunteer(input: VolunteerFormData) {
   const response = await apiClient<VolunteerDto>("/api/bff/volunteers", {
     method: "POST",
@@ -116,6 +154,21 @@ export async function updateVolunteer(id: string, input: VolunteerFormData) {
   });
 
   return toVolunteerModel(response);
+}
+
+export async function linkVolunteerUser(
+  volunteerId: string,
+  input: VolunteerUserLinkInput,
+) {
+  const response = await apiClient<VolunteerUserLinkResponseDto>(
+    `/api/bff/volunteers/${volunteerId}/user-link`,
+    {
+      method: "POST",
+      body: JSON.stringify(toVolunteerUserLinkPayload(input)),
+    },
+  );
+
+  return toVolunteerUserLinkResponse(response);
 }
 
 export async function deleteVolunteer(id: string) {

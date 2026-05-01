@@ -460,6 +460,8 @@ export function AppShell({
               [`& .MuiDrawer-paper`]: {
                 width: drawerWidth,
                 boxSizing: "border-box",
+                display: "flex",
+                flexDirection: "column",
                 top: 72,
                 height: "calc(100% - 72px)",
                 background: `linear-gradient(180deg, ${theme.palette.background.paper} 0%, #f0ebe1 100%)`,
@@ -480,7 +482,14 @@ export function AppShell({
               },
             }}
           >
-            <List sx={{ mt: 1 }}>
+            <List
+              sx={{
+                mt: 1,
+                flex: 1,
+                overflowY: "auto",
+                pr: 0.25,
+              }}
+            >
               {menu.map((item) => (
                 <ListItem key={item.path} disablePadding>
                   <ListItemButton

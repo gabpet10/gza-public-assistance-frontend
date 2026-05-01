@@ -25,4 +25,11 @@ export type ProblemDetails = {
   traceId?: string;
   additionalInfo?: string;
   errors?: Record<string, string[]>;
+  extensions?: {
+    code?: string;
+    traceId?: string;
+    additionalInfo?: string;
+    errors?: Record<string, string[]>;
+    [key: string]: unknown;
+  };
 };

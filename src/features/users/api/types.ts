@@ -1,10 +1,53 @@
+export const userTypeOptions = [
+  { value: "admin", label: "Admin" },
+  { value: "operator", label: "Operatore" },
+  { value: "volunteer", label: "Volontario" },
+] as const;
+
+export type UserTypeValue = (typeof userTypeOptions)[number]["value"];
+
+const userTypeAliases: Record<string, UserTypeValue> = {
+  admin: "admin",
+  super_user: "admin",
+  superuser: "admin",
+  operator: "operator",
+  org_admin: "operator",
+  organization_admin: "operator",
+  volunteer: "volunteer",
+  volontario: "volunteer",
+};
+
+export function normalizeUserType(
+  value?: string | null,
+): UserTypeValue | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return userTypeAliases[value.trim().toLowerCase()];
+}
+
+export function toUserTypeLabel(value?: string | null) {
+  const normalized = normalizeUserType(value);
+  if (!normalized) {
+    return value ?? "-";
+  }
+
+  return (
+    userTypeOptions.find((option) => option.value === normalized)?.label ??
+    normalized
+  );
+}
+
 export type User = {
   id: string;
   email: string;
-  firstName: string | null;
-  lastName: string | null;
+  firstName: string;
+  lastName: string;
   phone: string | null;
   isActive: boolean;
+  userType: UserTypeValue;
+  mustChangePassword: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 };
@@ -12,10 +55,12 @@ export type User = {
 export type UserDto = {
   id?: string;
   email?: string;
-  firstName?: string | null;
-  lastName?: string | null;
+  firstName?: string;
+  lastName?: string;
   phone?: string | null;
   isActive?: boolean;
+  userType?: string;
+  mustChangePassword?: boolean;
   createdAt?: string;
   lastLoginAt?: string | null;
 };
@@ -37,6 +82,7 @@ export type UserCreateRequestDto = {
   lastName?: string | null;
   phone?: string | null;
   isActive?: boolean;
+  userType?: UserTypeValue | null;
 };
 
 export type UserUpdateRequestDto = {
@@ -46,22 +92,28 @@ export type UserUpdateRequestDto = {
   lastName?: string | null;
   phone?: string | null;
   isActive?: boolean;
+  userType?: UserTypeValue | null;
 };
 
 export type UserOnboardingRequestDto = {
-  OrganizationId?: string | null;
-  UserEmail?: string | null;
-  UserPassword?: string | null;
-  UserFirstName?: string | null;
-  UserLastName?: string | null;
-  UserPhone?: string | null;
-  UserIsActive?: boolean;
-  UserType?: string | null;
-  MembershipStatus?: string | null;
-  MembershipJoinedAt?: string | null;
+  organizationId?: string | null;
+  userEmail?: string | null;
+  userPassword?: string | null;
+  userFirstName?: string | null;
+  userLastName?: string | null;
+  userIsActive?: boolean;
+  userType?: string | null;
+  membershipStatus?: string | null;
+  membershipJoinedAt?: string | null;
 };
 
-export type UserOnboardingResponseDto = UserDto | { user?: UserDto | null };
+export type UserOnboardingResponseDto = {
+  organizationId?: string;
+  userId?: string;
+  organizationMembershipId?: string;
+  userType?: string;
+  membershipStatus?: string;
+};
 
 export type UserFormData = {
   email: string;
@@ -70,6 +122,7 @@ export type UserFormData = {
   lastName: string;
   phone: string;
   isActive: boolean;
+  userType: UserTypeValue;
 };
 
 export type UserStatusFilter = "all" | "active" | "inactive";
@@ -82,4 +135,5 @@ export type CreateUserForOrganizationInput = {
   lastName: string;
   phone: string;
   isActive: boolean;
+  userType: UserTypeValue;
 };

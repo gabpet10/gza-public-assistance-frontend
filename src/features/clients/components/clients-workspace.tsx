@@ -6,9 +6,7 @@ import { Box, Button, Stack, Typography } from "@mui/material";
 import {
   DataGrid,
   type GridColDef,
-  type GridPaginationModel,
   type GridRowParams,
-  type GridSortModel,
 } from "@mui/x-data-grid";
 import { getProblemMessage } from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
@@ -20,7 +18,7 @@ import {
 } from "@/features/clients/api/clients-api";
 import type { Client, ClientFormData } from "@/features/clients/api/types";
 import { ClientFormDialog } from "@/features/clients/components/client-form-dialog";
-import { useDebouncedValue } from "@/shared/hooks/use-debounced-value";
+import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
 import { ContentCard } from "@/shared/ui/content-card";
 import {
@@ -58,15 +56,16 @@ export function ClientsWorkspace() {
     session?.activeOrganizationId ??
     session?.memberships?.[0]?.organizationId ??
     undefined;
-  const [searchText, setSearchText] = useState("");
-  const debouncedSearchText = useDebouncedValue(searchText, 420);
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 10,
-  });
-  const [sortModel, setSortModel] = useState<GridSortModel>([
-    { field: "createdAt", sort: "desc" },
-  ]);
+  const {
+    searchText,
+    debouncedSearchText,
+    paginationModel,
+    sortModel,
+    setSearchText,
+    setPaginationModel,
+    handlePaginationModelChange,
+    handleSortModelChange,
+  } = useServerGridState();
   const [data, setData] = useState<Client[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -322,10 +321,7 @@ export function ClientsWorkspace() {
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca cliente per nome, telefono, citta o provincia"
-            onSearchTextChange={(value) => {
-              setSearchText(value);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            onSearchTextChange={setSearchText}
           />
 
           {listError ? (
@@ -352,9 +348,9 @@ export function ClientsWorkspace() {
                 rowCount={totalCount}
                 pageSizeOptions={[10, 20, 50]}
                 paginationModel={paginationModel}
-                onPaginationModelChange={setPaginationModel}
+                onPaginationModelChange={handlePaginationModelChange}
                 sortModel={sortModel}
-                onSortModelChange={setSortModel}
+                onSortModelChange={handleSortModelChange}
                 loading={isLoading}
                 disableRowSelectionOnClick
                 onRowClick={(params: GridRowParams<Client>) =>

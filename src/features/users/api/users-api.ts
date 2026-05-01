@@ -12,13 +12,24 @@ import type {
   UserOnboardingResponseDto,
   UserPagedResultDto,
   UserStatusFilter,
+  UserTypeValue,
   UserUpdateRequestDto,
 } from "@/features/users/api/types";
+import { normalizeUserType } from "@/features/users/api/types";
 
 type SearchUsersInput = QueryParameters & {
   isActive?: boolean;
   organizationId?: string;
+  userTypes?: UserTypeValue[];
 };
+
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid users payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
 
 export function toUserActiveFilter(filter: UserStatusFilter) {
   if (filter === "active") {
@@ -33,14 +44,28 @@ export function toUserActiveFilter(filter: UserStatusFilter) {
 }
 
 function toUserModel(dto: UserDto): User {
+  const rawUserType = requireField(dto.userType, "user.userType");
+  const userType = normalizeUserType(rawUserType);
+
+  if (!userType) {
+    throw new Error(
+      `Invalid users payload: unsupported userType ${rawUserType}`,
+    );
+  }
+
   return {
-    id: dto.id ?? "",
-    email: dto.email ?? "",
-    firstName: dto.firstName ?? null,
-    lastName: dto.lastName ?? null,
+    id: requireField(dto.id, "user.id"),
+    email: requireField(dto.email, "user.email"),
+    firstName: requireField(dto.firstName, "user.firstName"),
+    lastName: requireField(dto.lastName, "user.lastName"),
     phone: dto.phone ?? null,
-    isActive: dto.isActive ?? false,
-    createdAt: dto.createdAt ?? "",
+    isActive: requireField(dto.isActive, "user.isActive"),
+    userType,
+    mustChangePassword: requireField(
+      dto.mustChangePassword,
+      "user.mustChangePassword",
+    ),
+    createdAt: requireField(dto.createdAt, "user.createdAt"),
     lastLoginAt: dto.lastLoginAt ?? null,
   };
 }
@@ -53,17 +78,21 @@ function toCreatePayload(input: UserFormData): UserCreateRequestDto {
     lastName: toNullableTrimmed(input.lastName),
     phone: toNullableTrimmed(input.phone),
     isActive: input.isActive,
+    userType: input.userType,
   };
 }
 
 function toUpdatePayload(input: UserFormData): UserUpdateRequestDto {
+  const normalizedPassword = toNullableTrimmed(input.password);
+
   return {
     email: toNullableTrimmed(input.email),
-    password: toNullableTrimmed(input.password),
+    password: normalizedPassword,
     firstName: toNullableTrimmed(input.firstName),
     lastName: toNullableTrimmed(input.lastName),
     phone: toNullableTrimmed(input.phone),
     isActive: input.isActive,
+    userType: input.userType,
   };
 }
 
@@ -94,16 +123,15 @@ function toCreateUserForOrganizationPayload(
   input: CreateUserForOrganizationInput,
 ): UserOnboardingRequestDto {
   return {
-    OrganizationId: toNullableTrimmed(input.organizationId),
-    UserEmail: toNullableTrimmed(input.email),
-    UserPassword: toNullableTrimmed(input.password),
-    UserFirstName: toNullableTrimmed(input.firstName),
-    UserLastName: toNullableTrimmed(input.lastName),
-    UserPhone: toNullableTrimmed(input.phone),
-    UserIsActive: input.isActive,
-    UserType: "operator",
-    MembershipStatus: "active",
-    MembershipJoinedAt: null,
+    organizationId: toNullableTrimmed(input.organizationId),
+    userEmail: toNullableTrimmed(input.email),
+    userPassword: toNullableTrimmed(input.password),
+    userFirstName: toNullableTrimmed(input.firstName),
+    userLastName: toNullableTrimmed(input.lastName),
+    userIsActive: input.isActive,
+    userType: input.userType,
+    membershipStatus: "active",
+    membershipJoinedAt: null,
   };
 }
 
@@ -118,15 +146,8 @@ export async function createUserForOrganization(
     },
   );
 
-  if ("user" in response && response.user) {
-    return toUserModel(response.user);
-  }
-
-  if ("user" in response) {
-    throw new Error("Risposta onboarding utente non valida.");
-  }
-
-  return toUserModel(response as UserDto);
+  const userId = requireField(response.userId, "onboarding.userId");
+  return getUserById(userId, input.organizationId);
 }
 
 export async function updateUser(id: string, input: UserFormData) {

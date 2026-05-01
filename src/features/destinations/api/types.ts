@@ -2,11 +2,11 @@ export type Destination = {
   id: string;
   organizationId: string;
   name: string;
-  description: string | null;
-  address: string | null;
-  city: string | null;
-  province: string | null;
-  notes: string | null;
+  description: string;
+  address: string;
+  city: string;
+  province: string;
+  notes: string;
   createdAt: string;
 };
 

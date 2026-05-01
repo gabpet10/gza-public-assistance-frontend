@@ -18,7 +18,16 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { LocalShipping } from "@mui/icons-material";
+import {
+  AccessibilityNew,
+  AssignmentInd,
+  Diversity3,
+  Healing,
+  LocalHospital,
+  LocalShipping,
+  MedicalInformation,
+  SwapHoriz,
+} from "@mui/icons-material";
 import dayjs, { type Dayjs } from "dayjs";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
@@ -26,9 +35,9 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { getErrorMessage } from "@/core/api/errors";
 import type {
   TransportAssignmentRole,
-  TransportPriority,
   TransportServiceStatus,
   TransportServiceFormData,
+  TransportType,
 } from "@/features/transport-services/api/types";
 import {
   FeatureDialogTitle,
@@ -43,6 +52,7 @@ import {
   type LookupSearchResult,
 } from "@/shared/ui/entity-lookup-dialog-field";
 import {
+  getTransportTypeLabel,
   getTransportStatusChipSx,
   getTransportStatusLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
@@ -72,16 +82,57 @@ type TransportServiceFormDialogProps = {
   onSubmit: (values: TransportServiceFormData) => Promise<void>;
 };
 
-const priorityOptions: Array<{ value: TransportPriority; label: string }> = [
-  { value: "routine", label: "Ordinario" },
-  { value: "urgent", label: "Urgente" },
+const transportTypeOptions: TransportType[] = [
+  "sanitario",
+  "sociale",
+  "dimissione_ospedaliera",
+  "visita_programmata",
+  "dialisi",
+  "riabilitazione",
+  "trasferimento_struttura",
+  "accompagnamento_amministrativo",
 ];
+
+function getTransportTypeIcon(transportType: TransportType) {
+  const iconSx = { fontSize: 16, color: "var(--accent-secondary)" };
+
+  if (transportType === "sanitario") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "dimissione_ospedaliera") {
+    return <Healing sx={iconSx} />;
+  }
+
+  if (transportType === "visita_programmata") {
+    return <MedicalInformation sx={iconSx} />;
+  }
+
+  if (transportType === "dialisi") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "riabilitazione") {
+    return <AccessibilityNew sx={iconSx} />;
+  }
+
+  if (transportType === "trasferimento_struttura") {
+    return <SwapHoriz sx={iconSx} />;
+  }
+
+  if (transportType === "accompagnamento_amministrativo") {
+    return <AssignmentInd sx={iconSx} />;
+  }
+
+  return <Diversity3 sx={iconSx} />;
+}
 
 const emptyTransportServiceForm: TransportServiceFormData = {
   clientId: "",
   clientLabel: "",
   pickupDestinationId: "",
   pickupDestinationLabel: "",
+  transportType: "sociale",
   scheduledAt: new Date().toISOString(),
   scheduledEnd: null,
   serviceStatus: "pending",
@@ -94,7 +145,6 @@ const emptyTransportServiceForm: TransportServiceFormData = {
   volunteerIds: [],
   volunteerLabels: [],
   volunteerRoles: [],
-  priority: "routine",
   isPaid: false,
   amount: null,
   note: "",
@@ -566,19 +616,26 @@ export function TransportServiceFormDialog({
                     <TextField
                       select
                       fullWidth
-                      label="Priorita"
-                      value={formValues.priority}
+                      label="Tipologia trasporto"
+                      value={formValues.transportType}
                       onChange={(event) =>
                         setFormValues((current) => ({
                           ...current,
-                          priority: event.target.value as TransportPriority,
+                          transportType: event.target.value as TransportType,
                         }))
                       }
                       disabled={isSubmitting}
                     >
-                      {priorityOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
+                      {transportTypeOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          <Stack
+                            direction="row"
+                            spacing={0.8}
+                            alignItems="center"
+                          >
+                            {getTransportTypeIcon(option)}
+                            <span>{getTransportTypeLabel(option)}</span>
+                          </Stack>
                         </MenuItem>
                       ))}
                     </TextField>

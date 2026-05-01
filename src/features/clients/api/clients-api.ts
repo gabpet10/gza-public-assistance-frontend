@@ -14,6 +14,14 @@ type SearchClientsInput = QueryParameters & {
   organizationId?: string;
 };
 
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid clients payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
+
 function toPayload(input: ClientFormData): ClientUpsertRequestDto {
   return {
     organizationId: toNullableTrimmed(input.organizationId),
@@ -29,17 +37,17 @@ function toPayload(input: ClientFormData): ClientUpsertRequestDto {
 
 function toClientModel(dto: ClientDto): Client {
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
-    firstName: dto.firstName ?? null,
-    lastName: dto.lastName ?? null,
-    fullName: dto.fullName ?? null,
-    phone: dto.phone ?? null,
-    address: dto.address ?? null,
-    city: dto.city ?? null,
-    province: dto.province ?? null,
-    notes: dto.notes ?? null,
-    createdAt: dto.createdAt ?? "",
+    id: requireField(dto.id, "client.id"),
+    organizationId: requireField(dto.organizationId, "client.organizationId"),
+    firstName: requireField(dto.firstName, "client.firstName"),
+    lastName: requireField(dto.lastName, "client.lastName"),
+    fullName: requireField(dto.fullName, "client.fullName"),
+    phone: requireField(dto.phone, "client.phone"),
+    address: requireField(dto.address, "client.address"),
+    city: requireField(dto.city, "client.city"),
+    province: requireField(dto.province, "client.province"),
+    notes: requireField(dto.notes, "client.notes"),
+    createdAt: requireField(dto.createdAt, "client.createdAt"),
   };
 }
 

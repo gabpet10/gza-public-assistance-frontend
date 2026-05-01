@@ -13,12 +13,13 @@ import {
 export async function POST(request: NextRequest) {
   const accessToken = getAccessTokenFromRequest(request);
   const sessionResult = readAuthSessionFromRequest(request);
+  const backendUrl = buildBackendUrl("/api/auth/change-password");
 
-  if (!accessToken || !sessionResult.session) {
+  if (!accessToken) {
     const response = NextResponse.json(
       {
         title: "Unauthorized",
-        detail: "Authentication required.",
+        detail: "Authentication required (missing access token).",
         status: 401,
       },
       { status: 401 },
@@ -29,18 +30,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.text();
-  const backendResponse = await fetch(
-    buildBackendUrl("/api/auth/change-password"),
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${accessToken}`,
-      },
-      body,
-      cache: "no-store",
+  const backendResponse = await fetch(backendUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
     },
-  );
+    body,
+    cache: "no-store",
+  });
 
   if (!backendResponse.ok) {
     return createProxyResponse(backendResponse);
@@ -48,10 +46,12 @@ export async function POST(request: NextRequest) {
 
   const response = new NextResponse(null, { status: 204 });
 
-  setAuthSessionCookie(response, {
-    ...sessionResult.session,
-    mustChangePassword: false,
-  });
+  if (sessionResult.session) {
+    setAuthSessionCookie(response, {
+      ...sessionResult.session,
+      mustChangePassword: false,
+    });
+  }
 
   return response;
 }

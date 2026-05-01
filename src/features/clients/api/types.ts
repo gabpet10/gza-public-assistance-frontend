@@ -1,14 +1,14 @@
 export type Client = {
   id: string;
   organizationId: string;
-  firstName: string | null;
-  lastName: string | null;
-  fullName: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  province: string | null;
-  notes: string | null;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  city: string;
+  province: string;
+  notes: string;
   createdAt: string;
 };
 

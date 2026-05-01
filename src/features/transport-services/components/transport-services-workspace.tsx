@@ -37,21 +37,14 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import type { GridRowParams } from "@mui/x-data-grid";
-import { ApiError, getErrorMessage, toApiUiError } from "@/core/api/errors";
+import { getErrorMessage } from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
+import { getEffectiveRoleFromSession } from "@/core/auth/roles";
 import {
-  acceptTransportService,
-  assignTransportService,
-  cancelTransportService,
-  completeTransportService,
-  createTransportService,
   deleteTransportService,
   getTransportServiceById,
   getTransportCalendarEvents,
   searchTransportServices,
-  startTransportService,
-  updateTransportServiceSchedule,
-  updateTransportService,
 } from "@/features/transport-services/api/transport-services-api";
 import { searchClients } from "@/features/clients/api/clients-api";
 import { searchDestinations } from "@/features/destinations/api/destinations-api";
@@ -60,7 +53,6 @@ import { toVehicleTypeLabel } from "@/features/vehicles/api/types";
 import { searchVolunteers } from "@/features/volunteers/api/volunteers-api";
 import type {
   TransportAssignmentRole,
-  TransportPriority,
   TransportCalendarEvent,
   TransportServiceFormData,
   TransportService,
@@ -94,11 +86,19 @@ import {
   workspacePrimaryActionButtonSx,
   workspaceViewToggleGroupSx,
 } from "@/shared/ui/workspace-styles";
+import {
+  mergeSelectedTransportService,
+  normalizeLookupLabel,
+  sanitizeTransportSortField,
+  toCalendarFetchWindow,
+  toServiceFallbackFromCalendarEvent,
+  toUtcIsoOrUndefined,
+} from "./transport-services-workspace.helpers";
+import { useTransportServiceMutations } from "./use-transport-service-mutations";
 import { TransportServiceDetailPanel } from "./transport-service-detail-panel";
 
 type WorkspaceView = "grid" | "calendar";
 type TransportStatusFilter = "OPEN" | TransportServiceStatus;
-type TransportPriorityFilter = "all" | TransportPriority;
 type CalendarSchedulerView = "day" | "week" | "month" | "agenda";
 
 type AssignDialogMember = {
@@ -120,171 +120,14 @@ const statusFilterOptions: Array<{
   { value: "cancelled", label: "Annullato" },
 ];
 
-const priorityFilterOptions: Array<{
-  value: TransportPriorityFilter;
-  label: string;
-}> = [
-  { value: "all", label: "Tutte le priorita" },
-  { value: "routine", label: "Ordinaria" },
-  { value: "urgent", label: "Urgente" },
-];
-
-type ConflictProblem = {
-  type?: string;
-  code?: string;
-  detail?: string;
-  startUtc?: string;
-  endUtc?: string;
-  resourceId?: string;
-  conflictingServiceId?: string;
-  expectedVersion?: number;
-  currentVersion?: number;
-};
-
-function toConflictProblem(error: unknown): ConflictProblem | undefined {
-  if (error instanceof ApiError) {
-    return error.problem as ConflictProblem | undefined;
-  }
-
-  if (error instanceof Error) {
-    return (error as Error & { problem?: ConflictProblem }).problem;
-  }
-
-  return undefined;
-}
-
-function toConflictType(problem: ConflictProblem | undefined) {
-  const raw = (problem?.type ?? problem?.code ?? "").trim().toLowerCase();
-  if (!raw) {
-    return "";
-  }
-
-  const fromUri = raw.split("/").filter(Boolean).at(-1);
-  return fromUri ?? raw;
-}
-
-function formatConflictDateTime(value: string | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toLocaleString("it-IT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-function toConflictMessage(error: unknown): string | null {
-  const status =
-    error instanceof ApiError
-      ? error.status
-      : error instanceof Error
-        ? (error as Error & { status?: number }).status
-        : undefined;
-
-  if (status !== 409) {
-    return null;
-  }
-
-  const problem = toConflictProblem(error);
-  const conflictType = toConflictType(problem);
-  const formattedStart = formatConflictDateTime(problem?.startUtc);
-  const formattedEnd = formatConflictDateTime(problem?.endUtc);
-  const timeWindow =
-    formattedStart && formattedEnd
-      ? `${formattedStart} - ${formattedEnd}`
-      : null;
-  const conflictingService = problem?.conflictingServiceId?.trim();
-  const resourceId = problem?.resourceId?.trim();
-
-  if (
-    conflictType.includes("schedule_version_conflict") ||
-    conflictType.includes("version_conflict")
-  ) {
-    return "Un altro operatore ha aggiornato la pianificazione. Ricarica i dati e riprova.";
-  }
-
-  if (conflictType.includes("vehicle_overlap")) {
-    const serviceInfo = conflictingService
-      ? ` Servizio in conflitto: ${conflictingService}.`
-      : "";
-    const rangeInfo = timeWindow ? ` Fascia oraria: ${timeWindow}.` : "";
-    const vehicleInfo = resourceId ? ` Veicolo: ${resourceId}.` : "";
-    return `Il veicolo selezionato risulta gia occupato.${vehicleInfo}${rangeInfo}${serviceInfo}`.trim();
-  }
-
-  if (conflictType.includes("volunteer_overlap")) {
-    const serviceInfo = conflictingService
-      ? ` Servizio in conflitto: ${conflictingService}.`
-      : "";
-    const rangeInfo = timeWindow ? ` Fascia oraria: ${timeWindow}.` : "";
-    const volunteerInfo = resourceId ? ` Volontario: ${resourceId}.` : "";
-    return `Il volontario selezionato risulta gia occupato.${volunteerInfo}${rangeInfo}${serviceInfo}`.trim();
-  }
-
-  if (problem?.detail?.trim()) {
-    return problem.detail.trim();
-  }
-
-  return null;
-}
-
-function toCalendarFetchWindow(
-  view: CalendarSchedulerView,
-  visibleDateIso: string,
-) {
-  const parsedVisibleDate = dayjs(visibleDateIso);
-  const anchor = parsedVisibleDate.isValid() ? parsedVisibleDate : dayjs();
-
-  if (view === "day") {
-    return {
-      startUtc: anchor.startOf("day").toISOString(),
-      endUtc: anchor.endOf("day").toISOString(),
-    };
-  }
-
-  if (view === "month") {
-    return {
-      startUtc: anchor.startOf("month").toISOString(),
-      endUtc: anchor.endOf("month").toISOString(),
-    };
-  }
-
-  if (view === "agenda") {
-    const weekStart = anchor.startOf("week");
-    return {
-      startUtc: weekStart.toISOString(),
-      endUtc: weekStart.endOf("week").add(3, "week").toISOString(),
-    };
-  }
-
-  return {
-    startUtc: anchor.startOf("week").toISOString(),
-    endUtc: anchor.endOf("week").toISOString(),
-  };
-}
-
-function toUtcIsoOrUndefined(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const parsed = dayjs(trimmed);
-  if (!parsed.isValid()) {
-    return undefined;
-  }
-
-  return parsed.toISOString();
-}
-
 export function TransportServicesWorkspace() {
   const { session } = useAuth();
+  const effectiveRole = getEffectiveRoleFromSession(session);
+  const isVolunteer = effectiveRole === "VOLUNTEER";
+  const canManageServiceCrud = !isVolunteer;
+  const canUseLifecycleActions = !isVolunteer;
+  const canOverrideAssignments =
+    effectiveRole === "ORG_ADMIN" || effectiveRole === "SUPER_USER";
   const scopedOrganizationId =
     session?.activeOrganizationId ??
     session?.memberships?.[0]?.organizationId ??
@@ -301,8 +144,6 @@ export function TransportServicesWorkspace() {
   const [activeView, setActiveView] = useState<WorkspaceView>("grid");
   const [statusFilter, setStatusFilter] =
     useState<TransportStatusFilter>("OPEN");
-  const [priorityFilter, setPriorityFilter] =
-    useState<TransportPriorityFilter>("all");
   const [volunteerFilterIds, setVolunteerFilterIds] = useState<string[]>([]);
   const [volunteerFilterLabels, setVolunteerFilterLabels] = useState<string[]>(
     [],
@@ -337,12 +178,6 @@ export function TransportServicesWorkspace() {
   const [openedServiceId, setOpenedServiceId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionToast, setActionToast] = useState<{
-    message: string;
-    severity: "warning" | "error";
-  } | null>(null);
-  const [isActionSubmitting, setIsActionSubmitting] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [assignVehicleId, setAssignVehicleId] = useState("");
   const [assignVehicleLabel, setAssignVehicleLabel] = useState("");
@@ -353,6 +188,16 @@ export function TransportServicesWorkspace() {
   >([]);
   const [assignNote, setAssignNote] = useState("");
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [isVolunteerVehicleDialogOpen, setIsVolunteerVehicleDialogOpen] =
+    useState(false);
+  const [volunteerVehicleId, setVolunteerVehicleId] = useState("");
+  const [volunteerVehicleLabel, setVolunteerVehicleLabel] = useState("");
+  const [volunteerVehicleDescription, setVolunteerVehicleDescription] =
+    useState("");
+  const [volunteerVehicleNote, setVolunteerVehicleNote] = useState("");
+  const [volunteerVehicleError, setVolunteerVehicleError] = useState<
+    string | null
+  >(null);
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   const [rescheduleAt, setRescheduleAt] = useState("");
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
@@ -364,186 +209,41 @@ export function TransportServicesWorkspace() {
   const editDialog = useDialogState(false);
   const deleteDialog = useConfirmActionState();
 
-  const pickDisplayLabel = (
-    detailLabel: string | null | undefined,
-    entityId: string | null | undefined,
-    gridLabel: string | null | undefined,
-  ) => {
-    const normalizedDetail = detailLabel?.trim() ?? "";
-    const normalizedEntityId = entityId?.trim() ?? "";
-    const normalizedGrid = gridLabel?.trim() ?? "";
-
-    const detailIsOnlyId =
-      normalizedDetail.length > 0 &&
-      normalizedEntityId.length > 0 &&
-      normalizedDetail === normalizedEntityId;
-
-    if (normalizedDetail.length > 0 && !detailIsOnlyId) {
-      return normalizedDetail;
-    }
-
-    if (normalizedGrid.length > 0) {
-      return normalizedGrid;
-    }
-
-    return normalizedDetail || null;
-  };
-
-  const normalizeLookupLabel = (
-    label: string | null | undefined,
-    entityId: string | null | undefined,
-  ) => {
-    const normalizedLabel = label?.trim() ?? "";
-    const normalizedEntityId = entityId?.trim() ?? "";
-
-    if (!normalizedLabel) {
-      return "";
-    }
-
-    if (normalizedEntityId && normalizedLabel === normalizedEntityId) {
-      return "";
-    }
-
-    return normalizedLabel;
-  };
-
-  const toServiceFallbackFromCalendarEvent = (
-    event: TransportCalendarEvent,
-  ): TransportService => {
-    const volunteers = event.volunteers.map((volunteer) => ({ ...volunteer }));
-    const assignedVolunteerIds = volunteers
-      .map((volunteer) => volunteer.volunteerId?.trim() ?? "")
-      .filter(Boolean);
-    const assignedVolunteerNames = volunteers.map(
-      (volunteer) => volunteer.fullName?.trim() ?? "",
-    );
-    const fallbackClientName = [event.clientFirstName, event.clientLastName]
-      .map((value) => value?.trim() ?? "")
-      .filter(Boolean)
-      .join(" ");
-    const fallbackPickupDestination = [
-      event.pickupDestinationAddress,
-      event.pickupDestinationCity,
-      event.pickupDestinationProvince,
-    ]
-      .map((value) => value?.trim() ?? "")
-      .filter(Boolean)
-      .join(" · ");
-    const fallbackVehicleName = [
-      event.vehicleDescription,
-      event.vehiclePlateNumber,
-      event.vehicleType,
-    ]
-      .map((value) => value?.trim() ?? "")
-      .filter(Boolean)
-      .join(" · ");
-
-    const clientDisplayName =
-      event.clientDisplayName ??
-      event.clientFullName ??
-      (fallbackClientName || event.clientId || null);
-    const pickupDestinationDisplayName =
-      event.pickupDestinationDisplayName ??
-      event.pickupDestinationName ??
-      (fallbackPickupDestination || event.pickupDestinationId || null);
-    const vehicleDisplayName =
-      event.vehicleDisplayName ??
-      (fallbackVehicleName || event.vehicleId || null);
-
-    return {
-      id: event.id,
-      organizationId: event.organizationId,
-      status: event.status,
-      priority: event.priority,
-      scheduledAt: event.scheduledAt,
-      scheduledEnd: event.scheduledEnd,
-      scheduleVersion: event.scheduleVersion,
-      clientId: event.clientId || null,
-      clientDisplayName,
-      pickupDestinationId: event.pickupDestinationId || null,
-      pickupDestinationDisplayName,
-      dropoffAddress: event.dropoffAddress || null,
-      dropoffCity: event.dropoffCity || null,
-      dropoffProvince: event.dropoffProvince || null,
-      note: event.note,
-      isPaid: event.isPaid,
-      amount: event.amount,
-      vehicleId: event.vehicleId,
-      vehiclePlateNumber: event.vehiclePlateNumber,
-      vehicleType: event.vehicleType,
-      vehicleDisplayName,
-      vehicleDescription: event.vehicleDescription,
-      vehicleNote: event.vehicleNote,
-      vehicleCreatedAt: event.vehicleCreatedAt,
-      volunteers,
-      assignedVolunteerIds,
-      assignedVolunteerNames,
-      teamMemberCount: event.teamMemberCount || volunteers.length,
-      acceptedAt: null,
-      assignedAt: event.assignedAt,
-      startedAt: null,
-      completedAt: null,
-      cancelledAt: event.cancelledAt,
-      createdAt: event.createdAt,
-    };
-  };
+  const {
+    actionError,
+    actionToast,
+    isActionSubmitting,
+    setActionError,
+    setActionToast,
+    createService,
+    editService,
+    assignResources,
+    shiftCalendarEvent,
+    rescheduleService,
+    acceptService,
+    startService,
+    completeService,
+    cancelService,
+    volunteerSelfAssign,
+    volunteerSelfRemove,
+    volunteerAssignVehicle,
+    volunteerRemoveVehicle,
+    overrideRemoveVolunteer,
+    overrideRemoveVehicle,
+  } = useTransportServiceMutations({
+    sessionUserId: session?.userId,
+    scopedOrganizationId,
+    setSelectedServiceId,
+    setSelectedServiceFallback,
+    setReloadKey,
+  });
 
   const selectedTransportService = useMemo(() => {
-    const selectedFromGrid = rows.find((item) => item.id === selectedServiceId);
-
-    if (selectedServiceFallback?.id === selectedServiceId) {
-      const selectedFromDetail = selectedServiceFallback;
-      const mergedVolunteers =
-        selectedFromDetail.volunteers.length > 0
-          ? selectedFromDetail.volunteers
-          : (selectedFromGrid?.volunteers ?? []);
-      const detailHasPaymentData =
-        selectedFromDetail.isPaid || selectedFromDetail.amount !== null;
-
-      return {
-        ...selectedFromDetail,
-        clientId:
-          selectedFromDetail.clientId ?? selectedFromGrid?.clientId ?? null,
-        clientDisplayName: pickDisplayLabel(
-          selectedFromDetail.clientDisplayName,
-          selectedFromDetail.clientId,
-          selectedFromGrid?.clientDisplayName,
-        ),
-        pickupDestinationId:
-          selectedFromDetail.pickupDestinationId ??
-          selectedFromGrid?.pickupDestinationId ??
-          null,
-        pickupDestinationDisplayName: pickDisplayLabel(
-          selectedFromDetail.pickupDestinationDisplayName,
-          selectedFromDetail.pickupDestinationId,
-          selectedFromGrid?.pickupDestinationDisplayName,
-        ),
-        vehicleId:
-          selectedFromDetail.vehicleId ?? selectedFromGrid?.vehicleId ?? null,
-        vehicleDisplayName: pickDisplayLabel(
-          selectedFromDetail.vehicleDisplayName,
-          selectedFromDetail.vehicleId,
-          selectedFromGrid?.vehicleDisplayName,
-        ),
-        vehicleDescription:
-          selectedFromDetail.vehicleDescription?.trim() ||
-          selectedFromGrid?.vehicleDescription ||
-          null,
-        volunteers: mergedVolunteers,
-        isPaid: detailHasPaymentData
-          ? selectedFromDetail.isPaid
-          : (selectedFromGrid?.isPaid ?? selectedFromDetail.isPaid),
-        amount: detailHasPaymentData
-          ? selectedFromDetail.amount
-          : (selectedFromGrid?.amount ?? selectedFromDetail.amount),
-      };
-    }
-
-    if (selectedFromGrid) {
-      return selectedFromGrid;
-    }
-
-    return null;
+    return mergeSelectedTransportService({
+      rows,
+      selectedServiceFallback,
+      selectedServiceId,
+    });
   }, [rows, selectedServiceFallback, selectedServiceId]);
 
   const openServiceDetail = (serviceId: string) => {
@@ -592,6 +292,15 @@ export function TransportServicesWorkspace() {
   };
 
   const handleCalendarEmptySlotCreate = (seedDateIso: string) => {
+    if (!canManageServiceCrud) {
+      setActionToast({
+        message:
+          "Con il profilo volontario non puoi creare nuovi servizi da calendario.",
+        severity: "warning",
+      });
+      return;
+    }
+
     setOpenedServiceId(null);
     setDetailError(null);
     setCalendarCreateSeed(seedDateIso);
@@ -607,19 +316,6 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    const startMs = new Date(event.scheduledAt).getTime();
-    const parsedEndMs = event.scheduledEnd
-      ? new Date(event.scheduledEnd).getTime()
-      : Number.NaN;
-    const durationMs =
-      Number.isFinite(startMs) &&
-      Number.isFinite(parsedEndMs) &&
-      parsedEndMs > startMs
-        ? parsedEndMs - startMs
-        : 1000 * 60 * 60;
-    const shiftedStartMs = startMs + minutesDelta * 60 * 1000;
-    const shiftedEndMs = shiftedStartMs + durationMs;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const expectedVersion =
       rows.find((item) => item.id === eventId)?.scheduleVersion ??
       event.scheduleVersion ??
@@ -627,15 +323,12 @@ export function TransportServicesWorkspace() {
         ? selectedTransportService.scheduleVersion
         : undefined);
 
-    await executeServiceAction(
-      () =>
-        updateTransportServiceSchedule(eventId, {
-          scheduledAt: new Date(shiftedStartMs).toISOString(),
-          scheduledEnd: new Date(shiftedEndMs).toISOString(),
-          timezone,
-          expectedVersion,
-        }),
-      "Spostamento evento non riuscito.",
+    await shiftCalendarEvent(
+      eventId,
+      event.scheduledAt,
+      event.scheduledEnd,
+      minutesDelta,
+      expectedVersion,
     );
   };
 
@@ -677,22 +370,23 @@ export function TransportServicesWorkspace() {
       : volunteerIds.map((_, index) => (index === 0 ? "driver" : "attendant"));
 
     return {
-      clientId: selectedTransportService.clientId ?? "",
+      clientId: selectedTransportService.clientId,
       clientLabel: normalizeLookupLabel(
         selectedTransportService.clientDisplayName,
         selectedTransportService.clientId,
       ),
-      pickupDestinationId: selectedTransportService.pickupDestinationId ?? "",
+      pickupDestinationId: selectedTransportService.pickupDestinationId,
       pickupDestinationLabel: normalizeLookupLabel(
         selectedTransportService.pickupDestinationDisplayName,
         selectedTransportService.pickupDestinationId,
       ),
+      transportType: selectedTransportService.transportType,
       scheduledAt: selectedTransportService.scheduledAt,
       scheduledEnd: selectedTransportService.scheduledEnd ?? null,
       serviceStatus: selectedTransportService.status,
-      dropoffAddress: selectedTransportService.dropoffAddress ?? "",
-      dropoffCity: selectedTransportService.dropoffCity ?? "",
-      dropoffProvince: selectedTransportService.dropoffProvince ?? "",
+      dropoffAddress: selectedTransportService.dropoffAddress,
+      dropoffCity: selectedTransportService.dropoffCity,
+      dropoffProvince: selectedTransportService.dropoffProvince,
       vehicleId: selectedTransportService.vehicleId ?? "",
       vehicleLabel: normalizeLookupLabel(
         selectedTransportService.vehicleDisplayName,
@@ -702,7 +396,6 @@ export function TransportServicesWorkspace() {
       volunteerIds,
       volunteerLabels,
       volunteerRoles,
-      priority: selectedTransportService.priority,
       isPaid: selectedTransportService.isPaid,
       amount: selectedTransportService.amount,
       note: selectedTransportService.note ?? "",
@@ -723,6 +416,7 @@ export function TransportServicesWorkspace() {
       clientLabel: "",
       pickupDestinationId: "",
       pickupDestinationLabel: "",
+      transportType: "sociale",
       scheduledAt: normalizedStart.toISOString(),
       scheduledEnd: normalizedStart.add(1, "hour").toISOString(),
       serviceStatus: "pending",
@@ -735,7 +429,6 @@ export function TransportServicesWorkspace() {
       volunteerIds: [],
       volunteerLabels: [],
       volunteerRoles: [],
-      priority: "routine",
       isPaid: false,
       amount: null,
       note: "",
@@ -807,59 +500,7 @@ export function TransportServicesWorkspace() {
   }, [editDialog.isOpen, selectedServiceId]);
 
   const handleCreateService = async (values: TransportServiceFormData) => {
-    if (!scopedOrganizationId) {
-      return;
-    }
-
-    let created = await createTransportService({
-      organizationId: scopedOrganizationId,
-      clientId: values.clientId,
-      pickupDestinationId: values.pickupDestinationId,
-      scheduledAt: values.scheduledAt,
-      scheduledEnd: values.scheduledEnd,
-      dropoffAddress: values.dropoffAddress,
-      dropoffCity: values.dropoffCity,
-      dropoffProvince: values.dropoffProvince,
-      priority: values.priority,
-      isPaid: values.isPaid,
-      amount: values.amount,
-      note: values.note || undefined,
-    });
-
-    if (values.serviceStatus === "accepted" && created.status === "pending") {
-      created = await acceptTransportService(created.id);
-    }
-
-    const shouldAssignResources =
-      values.vehicleId.trim().length > 0 && values.volunteerIds.length > 0;
-    if (shouldAssignResources) {
-      if (!session?.userId) {
-        throw new Error(
-          "Sessione utente non valida per assegnare le risorse del servizio.",
-        );
-      }
-
-      if (created.status === "pending") {
-        created = await acceptTransportService(created.id);
-      }
-
-      created = await assignTransportService(created.id, {
-        vehicleId: values.vehicleId,
-        assignedByUserId: session.userId,
-        teamMembers: values.volunteerIds.map((volunteerId, index) => ({
-          volunteerId,
-          role:
-            values.volunteerRoles[index] ??
-            (index === 0 ? "driver" : "attendant"),
-        })),
-        note: values.note || undefined,
-        assignedAt: new Date().toISOString(),
-      });
-    }
-
-    setSelectedServiceId(created.id);
-    setSelectedServiceFallback(created);
-    setReloadKey((current) => current + 1);
+    await createService(values);
   };
 
   const handleEditService = async (values: TransportServiceFormData) => {
@@ -867,86 +508,7 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    let updated = await updateTransportService(selectedTransportService.id, {
-      organizationId:
-        selectedTransportService.organizationId || scopedOrganizationId || "",
-      clientId: values.clientId,
-      pickupDestinationId: values.pickupDestinationId,
-      scheduledAt: values.scheduledAt,
-      scheduledEnd: values.scheduledEnd,
-      dropoffAddress: values.dropoffAddress,
-      dropoffCity: values.dropoffCity,
-      dropoffProvince: values.dropoffProvince,
-      priority: values.priority,
-      isPaid: values.isPaid,
-      amount: values.amount,
-      note: values.note || undefined,
-    });
-
-    if (values.serviceStatus === "accepted" && updated.status === "pending") {
-      updated = await acceptTransportService(updated.id);
-    }
-
-    const shouldAssignResources =
-      values.vehicleId.trim().length > 0 && values.volunteerIds.length > 0;
-    if (shouldAssignResources) {
-      if (!session?.userId) {
-        throw new Error(
-          "Sessione utente non valida per assegnare le risorse del servizio.",
-        );
-      }
-
-      if (updated.status === "pending") {
-        updated = await acceptTransportService(updated.id);
-      }
-
-      updated = await assignTransportService(updated.id, {
-        vehicleId: values.vehicleId,
-        assignedByUserId: session.userId,
-        teamMembers: values.volunteerIds.map((volunteerId, index) => ({
-          volunteerId,
-          role:
-            values.volunteerRoles[index] ??
-            (index === 0 ? "driver" : "attendant"),
-        })),
-        note: values.note || undefined,
-        assignedAt: new Date().toISOString(),
-      });
-    }
-
-    setSelectedServiceId(updated.id);
-    setSelectedServiceFallback(updated);
-
-    setReloadKey((current) => current + 1);
-  };
-
-  const executeServiceAction = async (
-    action: () => Promise<TransportService>,
-    fallbackMessage: string,
-  ): Promise<boolean> => {
-    setActionError(null);
-    setIsActionSubmitting(true);
-
-    try {
-      const updated = await action();
-      setSelectedServiceId(updated.id);
-      setSelectedServiceFallback(updated);
-      setReloadKey((current) => current + 1);
-      return true;
-    } catch (error) {
-      const uiError = toApiUiError(error, fallbackMessage);
-      const conflictMessage = toConflictMessage(error);
-      const userMessage = conflictMessage ?? uiError.userMessage;
-      setActionError(userMessage);
-      setActionToast({
-        message: userMessage,
-        severity:
-          uiError.isBadRequest || uiError.isConflict ? "warning" : "error",
-      });
-      return false;
-    } finally {
-      setIsActionSubmitting(false);
-    }
+    await editService(selectedTransportService, values);
   };
 
   const handleAcceptService = async () => {
@@ -954,10 +516,7 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    await executeServiceAction(
-      () => acceptTransportService(selectedTransportService.id),
-      "Cambio stato in accettato non riuscito.",
-    );
+    await acceptService(selectedTransportService.id);
   };
 
   const handleStartService = async () => {
@@ -965,10 +524,7 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    await executeServiceAction(
-      () => startTransportService(selectedTransportService.id),
-      "Avvio servizio non riuscito.",
-    );
+    await startService(selectedTransportService.id);
   };
 
   const handleCompleteService = async () => {
@@ -976,10 +532,7 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    await executeServiceAction(
-      () => completeTransportService(selectedTransportService.id),
-      "Completamento servizio non riuscito.",
-    );
+    await completeService(selectedTransportService.id);
   };
 
   const handleCancelService = async () => {
@@ -988,10 +541,7 @@ export function TransportServicesWorkspace() {
     }
 
     setIsCancelDialogOpen(false);
-    await executeServiceAction(
-      () => cancelTransportService(selectedTransportService.id),
-      "Annullamento servizio non riuscito.",
-    );
+    await cancelService(selectedTransportService.id);
   };
 
   const handleOpenAssignDialog = () => {
@@ -1051,19 +601,14 @@ export function TransportServicesWorkspace() {
 
     setAssignError(null);
 
-    const didAssign = await executeServiceAction(
-      () =>
-        assignTransportService(selectedTransportService.id, {
-          vehicleId: assignVehicleId,
-          assignedByUserId: session.userId,
-          teamMembers: assignTeamMembers.map((member) => ({
-            volunteerId: member.volunteerId,
-            role: member.role,
-          })),
-          note: assignNote || undefined,
-          assignedAt: new Date().toISOString(),
-        }),
-      "Assegnazione risorse non riuscita.",
+    const didAssign = await assignResources(
+      selectedTransportService.id,
+      assignVehicleId,
+      assignTeamMembers.map((member) => ({
+        volunteerId: member.volunteerId,
+        role: member.role,
+      })),
+      assignNote,
     );
 
     if (didAssign) {
@@ -1071,12 +616,90 @@ export function TransportServicesWorkspace() {
     }
   };
 
+  const handleVolunteerSelfAssign = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    await volunteerSelfAssign(selectedTransportService.id);
+  };
+
+  const handleVolunteerSelfRemove = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    await volunteerSelfRemove(selectedTransportService.id);
+  };
+
+  const handleOpenVolunteerVehicleDialog = () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    setVolunteerVehicleId(selectedTransportService.vehicleId ?? "");
+    setVolunteerVehicleLabel(selectedTransportService.vehicleDisplayName ?? "");
+    setVolunteerVehicleDescription(
+      selectedTransportService.vehicleDescription ?? "",
+    );
+    setVolunteerVehicleNote(selectedTransportService.note ?? "");
+    setVolunteerVehicleError(null);
+    setIsVolunteerVehicleDialogOpen(true);
+  };
+
+  const handleVolunteerAssignVehicle = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    if (!volunteerVehicleId.trim()) {
+      setVolunteerVehicleError("Seleziona un veicolo.");
+      return;
+    }
+
+    setVolunteerVehicleError(null);
+
+    const didAssign = await volunteerAssignVehicle(
+      selectedTransportService.id,
+      volunteerVehicleId,
+      volunteerVehicleNote,
+    );
+
+    if (didAssign) {
+      setIsVolunteerVehicleDialogOpen(false);
+    }
+  };
+
+  const handleVolunteerRemoveVehicle = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    await volunteerRemoveVehicle(selectedTransportService.id);
+  };
+
+  const handleOverrideRemoveVolunteer = async (volunteerId: string) => {
+    if (!selectedTransportService || !volunteerId.trim()) {
+      return;
+    }
+
+    await overrideRemoveVolunteer(selectedTransportService.id, volunteerId);
+  };
+
+  const handleOverrideRemoveVehicle = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    await overrideRemoveVehicle(selectedTransportService.id);
+  };
+
   const handleOpenRescheduleDialog = () => {
     if (!selectedTransportService) {
       return;
     }
 
-    setRescheduleAt(selectedTransportService.scheduledAt ?? "");
+    setRescheduleAt(selectedTransportService.scheduledAt);
     setRescheduleError(null);
     setIsRescheduleDialogOpen(true);
   };
@@ -1093,33 +716,17 @@ export function TransportServicesWorkspace() {
 
     setRescheduleError(null);
 
-    const parsedStart = new Date(rescheduleAt).getTime();
-    const currentStart = new Date(
-      selectedTransportService.scheduledAt,
-    ).getTime();
-    const currentEnd = selectedTransportService.scheduledEnd
-      ? new Date(selectedTransportService.scheduledEnd).getTime()
-      : Number.NaN;
-    const durationMs =
-      Number.isFinite(currentStart) &&
-      Number.isFinite(currentEnd) &&
-      currentEnd > currentStart
-        ? currentEnd - currentStart
-        : 1000 * 60 * 60;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    const expectedVersion =
+      selectedTransportService.scheduleVersion > 0
+        ? selectedTransportService.scheduleVersion
+        : undefined;
 
-    const didReschedule = await executeServiceAction(
-      () =>
-        updateTransportServiceSchedule(selectedTransportService.id, {
-          scheduledAt: new Date(parsedStart).toISOString(),
-          scheduledEnd: new Date(parsedStart + durationMs).toISOString(),
-          timezone,
-          expectedVersion:
-            selectedTransportService.scheduleVersion > 0
-              ? selectedTransportService.scheduleVersion
-              : undefined,
-        }),
-      "Ripianificazione non riuscita.",
+    const didReschedule = await rescheduleService(
+      selectedTransportService.id,
+      selectedTransportService.scheduledAt,
+      selectedTransportService.scheduledEnd,
+      rescheduleAt,
+      expectedVersion,
     );
 
     if (didReschedule) {
@@ -1142,11 +749,6 @@ export function TransportServicesWorkspace() {
 
   const handleStatusFilterChange = (value: TransportStatusFilter) => {
     setStatusFilter(value);
-    handlePaginationModelChange({ ...paginationModel, page: 0 });
-  };
-
-  const handlePriorityFilterChange = (value: TransportPriorityFilter) => {
-    setPriorityFilter(value);
     handlePaginationModelChange({ ...paginationModel, page: 0 });
   };
 
@@ -1209,8 +811,6 @@ export function TransportServicesWorkspace() {
         const onlyOpen = statusFilter === "OPEN" ? true : undefined;
         const selectedStatus =
           statusFilter === "OPEN" ? undefined : statusFilter;
-        const selectedPriority =
-          priorityFilter === "all" ? undefined : priorityFilter;
         const rangeStartUtc = toUtcIsoOrUndefined(gridRangeStartLocal);
         const rangeEndUtc = toUtcIsoOrUndefined(gridRangeEndLocal);
 
@@ -1218,11 +818,10 @@ export function TransportServicesWorkspace() {
           pageIndex: paginationModel.page,
           pageSize: paginationModel.pageSize,
           searchText: debouncedSearchText || undefined,
-          sortBy: sort?.field,
+          sortBy: sanitizeTransportSortField(sort?.field),
           sortDescending: sort?.sort === "desc",
           organizationId: scopedOrganizationId,
           status: selectedStatus,
-          priority: selectedPriority,
           onlyOpen,
           rangeStartUtc,
           rangeEndUtc,
@@ -1259,12 +858,16 @@ export function TransportServicesWorkspace() {
         }
       } catch (error) {
         if (!isDisposed) {
-          setListError(
-            getErrorMessage(
-              error,
-              "Caricamento servizi trasporto non riuscito.",
-            ),
+          const userMessage = getErrorMessage(
+            error,
+            "Caricamento servizi trasporto non riuscito.",
           );
+
+          setListError(userMessage);
+          setActionToast({
+            message: userMessage,
+            severity: "error",
+          });
           setRows([]);
           setTotalCount(0);
         }
@@ -1284,7 +887,6 @@ export function TransportServicesWorkspace() {
     debouncedSearchText,
     paginationModel.page,
     paginationModel.pageSize,
-    priorityFilter,
     reloadKey,
     scopedOrganizationId,
     session,
@@ -1295,6 +897,7 @@ export function TransportServicesWorkspace() {
     gridRangeEndLocal,
     calendarWindow.startUtc,
     calendarWindow.endUtc,
+    setActionToast,
   ]);
 
   if (!session) {
@@ -1407,16 +1010,32 @@ export function TransportServicesWorkspace() {
     };
   };
 
-  const canAccept = selectedTransportService?.status === "pending";
-  const canStart = selectedTransportService?.status === "assigned";
-  const canComplete = selectedTransportService?.status === "in_progress";
+  const canAccept =
+    canUseLifecycleActions && selectedTransportService?.status === "pending";
+  const canStart =
+    canUseLifecycleActions && selectedTransportService?.status === "assigned";
+  const canComplete =
+    canUseLifecycleActions &&
+    selectedTransportService?.status === "in_progress";
   const canCancel =
+    canUseLifecycleActions &&
     selectedTransportService?.status !== "completed" &&
     selectedTransportService?.status !== "cancelled";
   const canAssign =
     selectedTransportService?.status !== "completed" &&
     selectedTransportService?.status !== "cancelled";
   const canReschedule = canCancel;
+  const canEdit = Boolean(canManageServiceCrud);
+  const canDelete = Boolean(canManageServiceCrud);
+
+  const handleOpenAssignmentAction = () => {
+    if (isVolunteer) {
+      handleOpenVolunteerVehicleDialog();
+      return;
+    }
+
+    handleOpenAssignDialog();
+  };
 
   if (!scopedOrganizationId) {
     return (
@@ -1447,7 +1066,12 @@ export function TransportServicesWorkspace() {
                   variant="contained"
                   startIcon={<Add />}
                   sx={workspacePrimaryActionButtonSx}
+                  disabled={!canManageServiceCrud}
                   onClick={() => {
+                    if (!canManageServiceCrud) {
+                      return;
+                    }
+
                     setCalendarCreateSeed(null);
                     createDialog.open();
                   }}
@@ -1458,8 +1082,14 @@ export function TransportServicesWorkspace() {
                   variant="contained"
                   startIcon={<Edit />}
                   sx={workspacePrimaryActionButtonSx}
-                  disabled={!selectedTransportService}
-                  onClick={editDialog.open}
+                  disabled={!selectedTransportService || !canEdit}
+                  onClick={() => {
+                    if (!canEdit) {
+                      return;
+                    }
+
+                    editDialog.open();
+                  }}
                 >
                   Modifica
                 </Button>
@@ -1467,8 +1097,14 @@ export function TransportServicesWorkspace() {
                   variant="contained"
                   color="error"
                   startIcon={<DeleteOutline />}
-                  disabled={!selectedTransportService}
-                  onClick={deleteDialog.open}
+                  disabled={!selectedTransportService || !canDelete}
+                  onClick={() => {
+                    if (!canDelete) {
+                      return;
+                    }
+
+                    deleteDialog.open();
+                  }}
                 >
                   Elimina
                 </Button>
@@ -1514,7 +1150,7 @@ export function TransportServicesWorkspace() {
                   <TextField
                     fullWidth
                     label="Cerca"
-                    placeholder="Cerca per cliente, stato, priorita o destinazione"
+                    placeholder="Cerca per cliente, stato o destinazione"
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                   />
@@ -1530,23 +1166,6 @@ export function TransportServicesWorkspace() {
                     }
                   >
                     {statusFilterOptions.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Tipologia"
-                    value={priorityFilter}
-                    onChange={(event) =>
-                      handlePriorityFilterChange(
-                        event.target.value as TransportPriorityFilter,
-                      )
-                    }
-                  >
-                    {priorityFilterOptions.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -1703,7 +1322,7 @@ export function TransportServicesWorkspace() {
         onAccept={() => {
           void handleAcceptService();
         }}
-        onAssign={handleOpenAssignDialog}
+        onAssign={handleOpenAssignmentAction}
         onStart={() => {
           void handleStartService();
         }}
@@ -1711,15 +1330,55 @@ export function TransportServicesWorkspace() {
           void handleCompleteService();
         }}
         onReschedule={handleOpenRescheduleDialog}
-        onEdit={editDialog.open}
-        onDelete={deleteDialog.open}
+        onEdit={() => {
+          if (!canEdit) {
+            return;
+          }
+
+          editDialog.open();
+        }}
+        onDelete={() => {
+          if (!canDelete) {
+            return;
+          }
+
+          deleteDialog.open();
+        }}
         onCancelService={() => setIsCancelDialogOpen(true)}
+        onSelfAssign={() => {
+          void handleVolunteerSelfAssign();
+        }}
+        onSelfRemove={() => {
+          void handleVolunteerSelfRemove();
+        }}
+        onAssignVehicle={() => {
+          handleOpenVolunteerVehicleDialog();
+        }}
+        onRemoveVehicle={() => {
+          if (isVolunteer) {
+            void handleVolunteerRemoveVehicle();
+            return;
+          }
+
+          void handleOverrideRemoveVehicle();
+        }}
+        onRemoveVolunteer={(volunteerId) => {
+          void handleOverrideRemoveVolunteer(volunteerId);
+        }}
         canAccept={Boolean(canAccept)}
         canAssign={Boolean(canAssign)}
         canStart={Boolean(canStart)}
         canComplete={Boolean(canComplete)}
         canReschedule={Boolean(canReschedule)}
         canCancel={Boolean(canCancel)}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        canSelfAssign={isVolunteer}
+        canSelfRemove={isVolunteer}
+        canAssignVehicle={isVolunteer}
+        canRemoveVehicle={isVolunteer || canOverrideAssignments}
+        canOverrideRemoveVolunteer={canOverrideAssignments}
+        canOverrideRemoveVehicle={canOverrideAssignments}
         onClose={() => {
           setOpenedServiceId(null);
           setDetailError(null);
@@ -1914,6 +1573,90 @@ export function TransportServicesWorkspace() {
             }}
           >
             {isActionSubmitting ? "Assegnazione..." : "Conferma assegnazione"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={isVolunteerVehicleDialogOpen}
+        onClose={
+          isActionSubmitting
+            ? undefined
+            : () => setIsVolunteerVehicleDialogOpen(false)
+        }
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ pb: 1.25 }}>
+          <FeatureDialogTitle
+            icon={<LocalShipping sx={{ fontSize: 20 }} />}
+            eyebrow="Gestione veicolo"
+          />
+        </DialogTitle>
+        <DialogContent sx={formDialogContentSx}>
+          <Stack spacing={2.5} sx={{ pt: 1.5 }}>
+            {volunteerVehicleError ? (
+              <Alert severity="error">{volunteerVehicleError}</Alert>
+            ) : null}
+
+            <EntityLookupDialogField
+              label="Veicolo"
+              dialogTitle="Seleziona veicolo"
+              value={volunteerVehicleId ? [volunteerVehicleId] : []}
+              selectedOptions={
+                volunteerVehicleId
+                  ? [
+                      {
+                        id: volunteerVehicleId,
+                        label: volunteerVehicleLabel || volunteerVehicleId,
+                        description: volunteerVehicleDescription || undefined,
+                      },
+                    ]
+                  : []
+              }
+              required
+              disabled={isActionSubmitting || !scopedOrganizationId}
+              triggerAriaLabel="Apri ricerca veicolo"
+              onSearch={(input) =>
+                scopedOrganizationId
+                  ? searchVehicleLookup(input, scopedOrganizationId)
+                  : Promise.resolve({ items: [], hasNextPage: false })
+              }
+              onChange={(ids, options) => {
+                setVolunteerVehicleId(ids[0] ?? "");
+                setVolunteerVehicleLabel(options[0]?.label ?? "");
+                setVolunteerVehicleDescription(options[0]?.description ?? "");
+              }}
+            />
+
+            <TextField
+              label="Note"
+              value={volunteerVehicleNote}
+              onChange={(event) => setVolunteerVehicleNote(event.target.value)}
+              multiline
+              minRows={2}
+              disabled={isActionSubmitting}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={formDialogActionsEndSx}>
+          <Button
+            variant="outlined"
+            color="error"
+            disabled={isActionSubmitting}
+            onClick={() => setIsVolunteerVehicleDialogOpen(false)}
+          >
+            Annulla
+          </Button>
+          <Button
+            variant="contained"
+            sx={formDialogPrimaryActionSx}
+            disabled={isActionSubmitting}
+            onClick={() => {
+              void handleVolunteerAssignVehicle();
+            }}
+          >
+            {isActionSubmitting ? "Salvataggio..." : "Conferma veicolo"}
           </Button>
         </DialogActions>
       </Dialog>

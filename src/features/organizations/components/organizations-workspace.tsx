@@ -199,10 +199,10 @@ export function OrganizationsWorkspace() {
         ? {
             name: selectedRow.name,
             logo: selectedRow.logo ?? "",
-            vatNumber: selectedRow.vatNumber ?? "",
-            address: selectedRow.address ?? "",
-            city: selectedRow.city ?? "",
-            region: selectedRow.region ?? "",
+            vatNumber: selectedRow.vatNumber,
+            address: selectedRow.address,
+            city: selectedRow.city,
+            region: selectedRow.region,
             isActive: selectedRow.isActive,
           }
         : undefined,

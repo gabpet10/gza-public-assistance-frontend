@@ -9,13 +9,24 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  MenuItem,
   Stack,
   Switch,
   TextField,
+  type SvgIconProps,
 } from "@mui/material";
-import { Group } from "@mui/icons-material";
-import { getProblemMessage } from "@/core/api/errors";
+import {
+  AdminPanelSettings,
+  Badge,
+  Group,
+  VolunteerActivism,
+} from "@mui/icons-material";
+import { getErrorMessage } from "@/core/api/errors";
 import type { UserFormData } from "@/features/users/api/types";
+import {
+  type UserTypeValue,
+  userTypeOptions,
+} from "@/features/users/api/types";
 import {
   FeatureDialogTitle,
   formDialogActionsEndSx,
@@ -30,23 +41,45 @@ const emptyUserForm: UserFormData = {
   lastName: "",
   phone: "",
   isActive: true,
+  userType: "operator",
 };
 
 type UserFormDialogProps = Readonly<{
   open: boolean;
   mode: "create" | "edit";
   initialValues?: UserFormData;
+  allowedUserTypes?: ReadonlyArray<(typeof userTypeOptions)[number]>;
   onClose: () => void;
   onSubmit: (values: UserFormData) => Promise<void>;
 }>;
+
+function getUserTypeIcon(type: UserTypeValue) {
+  const iconProps: SvgIconProps = { fontSize: "small", sx: { mr: 1 } };
+
+  if (type === "admin") {
+    return <AdminPanelSettings {...iconProps} />;
+  }
+
+  if (type === "volunteer") {
+    return <VolunteerActivism {...iconProps} />;
+  }
+
+  return <Badge {...iconProps} />;
+}
 
 export function UserFormDialog({
   open,
   mode,
   initialValues,
+  allowedUserTypes,
   onClose,
   onSubmit,
 }: UserFormDialogProps) {
+  const resolvedUserTypeOptions =
+    allowedUserTypes && allowedUserTypes.length > 0
+      ? allowedUserTypes
+      : userTypeOptions;
+
   const [formValues, setFormValues] = useState<UserFormData>(
     initialValues ?? emptyUserForm,
   );
@@ -58,9 +91,19 @@ export function UserFormDialog({
       return;
     }
 
-    setFormValues(initialValues ?? emptyUserForm);
+    const nextFormValues = initialValues ?? emptyUserForm;
+    const hasCurrentType = resolvedUserTypeOptions.some(
+      (option) => option.value === nextFormValues.userType,
+    );
+
+    setFormValues({
+      ...nextFormValues,
+      userType: hasCurrentType
+        ? nextFormValues.userType
+        : (resolvedUserTypeOptions[0]?.value ?? "operator"),
+    });
     setSubmitError(null);
-  }, [initialValues, open]);
+  }, [initialValues, open, resolvedUserTypeOptions]);
 
   const title = useMemo(
     () => (mode === "create" ? "Nuovo user" : "Modifica user"),
@@ -83,10 +126,7 @@ export function UserFormDialog({
       await onSubmit(formValues);
       onClose();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? getProblemMessage((error as { problem?: never }).problem)
-          : "Salvataggio non riuscito.";
+      const message = getErrorMessage(error, "Salvataggio non riuscito.");
       setSubmitError(message);
     } finally {
       setIsSubmitting(false);
@@ -149,6 +189,27 @@ export function UserFormDialog({
                 handleFieldChange("phone", event.target.value)
               }
             />
+            <TextField
+              select
+              label="Tipo utente"
+              value={formValues.userType}
+              onChange={(event) =>
+                handleFieldChange(
+                  "userType",
+                  event.target.value as UserFormData["userType"],
+                )
+              }
+              required
+            >
+              {resolvedUserTypeOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  <Stack direction="row" alignItems="center">
+                    {getUserTypeIcon(option.value)}
+                    {option.label}
+                  </Stack>
+                </MenuItem>
+              ))}
+            </TextField>
             <FormControlLabel
               control={
                 <Switch

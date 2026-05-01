@@ -6,6 +6,7 @@ import {
   CheckCircleOutline,
   DeleteOutline,
   Edit,
+  Link,
   PlaylistAdd,
   RadioButtonUnchecked,
   VisibilityOutlined,
@@ -16,26 +17,35 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   IconButton,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
-import type {
-  GridColDef,
-  GridPaginationModel,
-  GridRowParams,
-  GridSortModel,
-} from "@mui/x-data-grid";
+import type { GridColDef, GridRowParams } from "@mui/x-data-grid";
 import { DataGrid } from "@mui/x-data-grid";
-import { getProblemMessage } from "@/core/api/errors";
+import {
+  ApiError,
+  getErrorMessage,
+  getProblemMessage,
+} from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
-import { useDebouncedValue } from "@/shared/hooks/use-debounced-value";
+import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import { ContentCard } from "@/shared/ui/content-card";
 import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
+import {
+  EntityLookupDialogField,
+  type LookupOption,
+  type LookupSearchInput,
+  type LookupSearchResult,
+} from "@/shared/ui/entity-lookup-dialog-field";
 import {
   getWorkspaceGridRowClassName,
   organizationsEnterpriseDataGridSx,
@@ -53,11 +63,13 @@ import {
   deleteVolunteer,
   deleteVolunteerSkill,
   getVolunteerById,
+  linkVolunteerUser,
   searchVolunteers,
   toBackendActiveFilter,
   updateVolunteer,
   updateVolunteerSkill,
 } from "@/features/volunteers/api/volunteers-api";
+import { searchUsers } from "@/features/users/api/users-api";
 import {
   normalizeSkillType,
   toSkillTypeLabel,
@@ -91,6 +103,24 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("it-IT").format(new Date(value));
 }
 
+function getLinkedUserLabel(volunteer: VolunteerListItem | Volunteer) {
+  const fullName = [volunteer.userFirstName, volunteer.userLastName]
+    .map((value) => value?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ");
+
+  if (fullName) {
+    return fullName;
+  }
+
+  return volunteer.userEmail || "-";
+}
+
+function getLinkedUserEmail(volunteer: VolunteerListItem | Volunteer) {
+  const normalizedEmail = volunteer.userEmail?.trim();
+  return normalizedEmail || "-";
+}
+
 const baseGridColumns: GridColDef<VolunteerListItem>[] = [
   {
     field: "fullName",
@@ -110,6 +140,23 @@ const baseGridColumns: GridColDef<VolunteerListItem>[] = [
     headerName: "Codice fiscale",
     flex: 1,
     minWidth: 180,
+  },
+  {
+    field: "userId",
+    headerName: "Utente collegato",
+    flex: 1,
+    minWidth: 260,
+    sortable: false,
+    renderCell: (params) => {
+      const row = params.row;
+      const linkedUserEmail = getLinkedUserEmail(row);
+
+      return (
+        <Typography variant="bodySmall" color="text.secondary" noWrap>
+          {linkedUserEmail}
+        </Typography>
+      );
+    },
   },
   {
     field: "createdAt",
@@ -139,17 +186,18 @@ export function VolunteersWorkspace() {
   const { session } = useAuth();
   const scopedOrganizationId =
     session?.activeOrganizationId ?? session?.memberships?.[0]?.organizationId;
-  const [searchText, setSearchText] = useState("");
-  const debouncedSearchText = useDebouncedValue(searchText, 420);
+  const {
+    searchText,
+    debouncedSearchText,
+    paginationModel,
+    sortModel,
+    setSearchText,
+    setPaginationModel,
+    handlePaginationModelChange,
+    handleSortModelChange,
+  } = useServerGridState();
   const [statusFilter, setStatusFilter] =
     useState<VolunteerStatusFilter>("all");
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 10,
-  });
-  const [sortModel, setSortModel] = useState<GridSortModel>([
-    { field: "createdAt", sort: "desc" },
-  ]);
   const [data, setData] = useState<VolunteerListItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -181,6 +229,12 @@ export function VolunteersWorkspace() {
     useState<VolunteerSkill | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
+  const [isLinkUserDialogOpen, setIsLinkUserDialogOpen] = useState(false);
+  const [linkUserId, setLinkUserId] = useState("");
+  const [linkUserLabel, setLinkUserLabel] = useState("");
+  const [linkUserDescription, setLinkUserDescription] = useState("");
+  const [linkUserError, setLinkUserError] = useState<string | null>(null);
+  const [isLinkingUser, setIsLinkingUser] = useState(false);
 
   const openVolunteerDetail = (volunteerId: string) => {
     setSelectedVolunteerId(volunteerId);
@@ -470,6 +524,12 @@ export function VolunteersWorkspace() {
     selectedVolunteer?.fullName ??
     selectedRow?.fullName ??
     "volontario selezionato";
+  const detailLinkedUserSource = selectedVolunteer?.userEmail?.trim().length
+    ? selectedVolunteer
+    : (selectedRow ?? selectedVolunteer);
+  const detailLinkedUserEmail = detailLinkedUserSource
+    ? getLinkedUserEmail(detailLinkedUserSource)
+    : "-";
   const canEditOrDelete = Boolean(
     selectedVolunteerId &&
     ((selectedRow && selectedRow.id === selectedVolunteerId) ||
@@ -592,6 +652,96 @@ export function VolunteersWorkspace() {
     }
   };
 
+  const searchUserLookup = async (
+    input: LookupSearchInput,
+    organizationId: string,
+  ): Promise<LookupSearchResult> => {
+    const response = await searchUsers({
+      pageIndex: input.pageIndex,
+      pageSize: input.pageSize,
+      searchText: input.query || undefined,
+      organizationId,
+      isActive: true,
+    });
+
+    return {
+      items: response.items.map(
+        (item): LookupOption => ({
+          id: item.id,
+          label:
+            [item.firstName, item.lastName]
+              .map((value) => value?.trim() ?? "")
+              .filter(Boolean)
+              .join(" ") ||
+            item.email ||
+            item.id,
+          description: item.email || undefined,
+        }),
+      ),
+      hasNextPage: response.hasNextPage,
+    };
+  };
+
+  const handleOpenLinkUserDialog = () => {
+    if (!selectedVolunteer) {
+      return;
+    }
+
+    setLinkUserId(selectedVolunteer.userId ?? "");
+    setLinkUserLabel(
+      selectedVolunteer.userId ? getLinkedUserLabel(selectedVolunteer) : "",
+    );
+    setLinkUserDescription(selectedVolunteer.userEmail ?? "");
+    setLinkUserError(null);
+    setIsLinkUserDialogOpen(true);
+  };
+
+  const handleLinkUser = async () => {
+    if (!selectedVolunteerId) {
+      return;
+    }
+
+    if (!linkUserId.trim()) {
+      setLinkUserError("Seleziona un utente da collegare.");
+      return;
+    }
+
+    setLinkUserError(null);
+    setIsLinkingUser(true);
+
+    try {
+      await linkVolunteerUser(selectedVolunteerId, { userId: linkUserId });
+
+      if (openedVolunteerId) {
+        const refreshedVolunteer = await getVolunteerById(
+          openedVolunteerId,
+          scopedOrganizationId,
+        );
+        setSelectedVolunteer(refreshedVolunteer);
+      }
+
+      setIsLinkUserDialogOpen(false);
+      setReloadKey((current) => current + 1);
+      setDetailReloadKey((current) => current + 1);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        setLinkUserError(
+          "Utente o volontario non trovato. Verifica che l'utente esista nell'organizzazione.",
+        );
+      } else if (error instanceof ApiError && error.status === 409) {
+        setLinkUserError(
+          "Impossibile collegare l'utente: esiste gia un collegamento incompatibile.",
+        );
+      } else {
+        setLinkUserError(
+          getErrorMessage(error, "Collegamento utente non riuscito."),
+        );
+      }
+    } finally {
+      setIsLinkingUser(false);
+    }
+  };
+
   return (
     <Stack spacing={4}>
       <ContentCard className="overflow-hidden p-0">
@@ -646,10 +796,7 @@ export function VolunteersWorkspace() {
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca volontario per nome, codice fiscale o telefono"
-            onSearchTextChange={(value) => {
-              setSearchText(value);
-              setPaginationModel((current) => ({ ...current, page: 0 }));
-            }}
+            onSearchTextChange={setSearchText}
             filters={[
               {
                 key: "status",
@@ -688,9 +835,9 @@ export function VolunteersWorkspace() {
                 rowCount={totalCount}
                 pageSizeOptions={[10, 20, 50]}
                 paginationModel={paginationModel}
-                onPaginationModelChange={setPaginationModel}
+                onPaginationModelChange={handlePaginationModelChange}
                 sortModel={sortModel}
-                onSortModelChange={setSortModel}
+                onSortModelChange={handleSortModelChange}
                 loading={isLoading}
                 disableRowSelectionOnClick
                 onRowClick={handleRowClick}
@@ -752,6 +899,14 @@ export function VolunteersWorkspace() {
                           onClick={() => setIsEditDialogOpen(true)}
                         >
                           Modifica
+                        </Button>
+                        <Button
+                          variant="contained"
+                          startIcon={<Link />}
+                          sx={workspacePrimaryActionButtonSx}
+                          onClick={handleOpenLinkUserDialog}
+                        >
+                          Collega utente
                         </Button>
                         <Button
                           variant="contained"
@@ -841,6 +996,21 @@ export function VolunteersWorkspace() {
                             {selectedVolunteer.fiscalCode || "-"}
                           </Typography>
                         </div>
+                        <div className="grid grid-cols-[140px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                          <Typography
+                            variant="bodySmall"
+                            color="text.secondary"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Utente collegato
+                          </Typography>
+                          <Typography
+                            variant="bodyMedium"
+                            sx={{ fontWeight: 500 }}
+                          >
+                            {detailLinkedUserEmail}
+                          </Typography>
+                        </div>
                         <div className="grid grid-cols-[140px,1fr] items-start gap-4 px-4 py-3">
                           <Typography
                             variant="bodySmall"
@@ -926,6 +1096,70 @@ export function VolunteersWorkspace() {
         }}
         onSubmit={handleEditVolunteerSkill}
       />
+
+      <Dialog
+        open={isLinkUserDialogOpen}
+        onClose={
+          isLinkingUser ? undefined : () => setIsLinkUserDialogOpen(false)
+        }
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Collega utente</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ pt: 1.5 }}>
+            {linkUserError ? (
+              <Alert severity="warning">{linkUserError}</Alert>
+            ) : null}
+            <EntityLookupDialogField
+              label="Utente"
+              dialogTitle="Seleziona utente"
+              value={linkUserId ? [linkUserId] : []}
+              selectedOptions={
+                linkUserId
+                  ? [
+                      {
+                        id: linkUserId,
+                        label: linkUserLabel || linkUserId,
+                        description: linkUserDescription || undefined,
+                      },
+                    ]
+                  : []
+              }
+              required
+              triggerAriaLabel="Apri ricerca utenti"
+              disabled={isLinkingUser || !scopedOrganizationId}
+              onSearch={(input) =>
+                scopedOrganizationId
+                  ? searchUserLookup(input, scopedOrganizationId)
+                  : Promise.resolve({ items: [], hasNextPage: false })
+              }
+              onChange={(ids, options) => {
+                setLinkUserId(ids[0] ?? "");
+                setLinkUserLabel(options[0]?.label ?? "");
+                setLinkUserDescription(options[0]?.description ?? "");
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            onClick={() => setIsLinkUserDialogOpen(false)}
+            disabled={isLinkingUser}
+          >
+            Annulla
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Link />}
+            onClick={handleLinkUser}
+            disabled={isLinkingUser || !linkUserId.trim()}
+          >
+            Collega
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmActionDialog
         open={isDeleteVolunteerDialogOpen}

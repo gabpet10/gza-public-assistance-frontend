@@ -15,6 +15,14 @@ type SearchVehiclesInput = QueryParameters & {
   organizationId?: string;
 };
 
+function requireField<T>(value: T | null | undefined, fieldName: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Invalid vehicles payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
+
 function toPayload(input: VehicleFormData): VehicleUpsertRequestDto {
   const normalizedDescription = toNullableTrimmed(input.description);
 
@@ -23,20 +31,26 @@ function toPayload(input: VehicleFormData): VehicleUpsertRequestDto {
     plateNumber: toNullableTrimmed(input.plateNumber),
     type: toNullableTrimmed(normalizeVehicleType(input.type) ?? input.type),
     description: normalizedDescription,
-    note: normalizedDescription,
+    note: null,
   };
 }
 
 function toVehicleModel(dto: VehicleDto): Vehicle {
-  const normalizedType = normalizeVehicleType(dto.type);
+  const rawType = requireField(dto.type, "vehicle.type");
+  const normalizedType = normalizeVehicleType(rawType);
+
+  if (!normalizedType) {
+    throw new Error(`Invalid vehicles payload: unsupported type ${rawType}`);
+  }
 
   return {
-    id: dto.id ?? "",
-    organizationId: dto.organizationId ?? "",
-    plateNumber: dto.plateNumber ?? "",
-    type: normalizedType ?? null,
-    description: dto.description ?? dto.note ?? null,
-    createdAt: dto.createdAt ?? "",
+    id: requireField(dto.id, "vehicle.id"),
+    organizationId: requireField(dto.organizationId, "vehicle.organizationId"),
+    plateNumber: requireField(dto.plateNumber, "vehicle.plateNumber"),
+    type: normalizedType,
+    description: requireField(dto.description, "vehicle.description"),
+    note: requireField(dto.note, "vehicle.note"),
+    createdAt: requireField(dto.createdAt, "vehicle.createdAt"),
   };
 }
 

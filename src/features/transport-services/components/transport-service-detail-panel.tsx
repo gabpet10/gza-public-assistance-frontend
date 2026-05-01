@@ -3,6 +3,8 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
+  Avatar,
+  Box,
   Button,
   Drawer,
   IconButton,
@@ -23,25 +25,31 @@ import type {
   TransportServiceStatus,
 } from "@/features/transport-services/api/types";
 import {
-  getTransportPriorityChipSx,
-  getTransportPriorityLabel,
   getTransportStatusChipSx,
   getTransportStatusLabel,
+  getTransportTypeLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
 import {
   workspaceDetailCloseButtonSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
 import {
+  AccessibilityNew,
+  AssignmentInd,
   CheckCircleOutline,
+  Diversity3,
   DeleteOutline,
   Edit,
   EventRepeat,
   ExpandMore,
   FlagCircle,
   GroupAdd,
+  Healing,
+  LocalHospital,
+  MedicalInformation,
   PlayArrow,
   PublishedWithChanges,
+  SwapHoriz,
   VisibilityOutlined,
 } from "@mui/icons-material";
 
@@ -60,12 +68,25 @@ type TransportServiceDetailPanelProps = {
   onEdit: () => void;
   onDelete: () => void;
   onCancelService: () => void;
+  onSelfAssign: () => void;
+  onSelfRemove: () => void;
+  onAssignVehicle: () => void;
+  onRemoveVehicle: () => void;
+  onRemoveVolunteer: (volunteerId: string) => void;
   canAccept: boolean;
   canAssign: boolean;
   canStart: boolean;
   canComplete: boolean;
   canReschedule: boolean;
   canCancel: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canSelfAssign: boolean;
+  canSelfRemove: boolean;
+  canAssignVehicle: boolean;
+  canRemoveVehicle: boolean;
+  canOverrideRemoveVolunteer: boolean;
+  canOverrideRemoveVehicle: boolean;
   onClose: () => void;
 };
 
@@ -157,6 +178,59 @@ function getVolunteerRoleLabel(role: TransportAssignmentRole | null) {
   return role === "driver" ? "Autista" : "Accompagnatore";
 }
 
+function getNameInitials(value: string) {
+  const parts = value
+    .split(" ")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+
+  if (parts.length === 1) {
+    return parts[0][0]?.toUpperCase() ?? "V";
+  }
+
+  return "V";
+}
+
+function getTransportTypeIcon(
+  transportType: TransportService["transportType"],
+) {
+  const iconSx = { fontSize: 16, color: "var(--accent-secondary)" };
+
+  if (transportType === "sanitario") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "dimissione_ospedaliera") {
+    return <Healing sx={iconSx} />;
+  }
+
+  if (transportType === "visita_programmata") {
+    return <MedicalInformation sx={iconSx} />;
+  }
+
+  if (transportType === "dialisi") {
+    return <LocalHospital sx={iconSx} />;
+  }
+
+  if (transportType === "riabilitazione") {
+    return <AccessibilityNew sx={iconSx} />;
+  }
+
+  if (transportType === "trasferimento_struttura") {
+    return <SwapHoriz sx={iconSx} />;
+  }
+
+  if (transportType === "accompagnamento_amministrativo") {
+    return <AssignmentInd sx={iconSx} />;
+  }
+
+  return <Diversity3 sx={iconSx} />;
+}
+
 export function TransportServiceDetailPanel({
   open,
   service,
@@ -172,12 +246,25 @@ export function TransportServiceDetailPanel({
   onEdit,
   onDelete,
   onCancelService,
+  onSelfAssign,
+  onSelfRemove,
+  onAssignVehicle,
+  onRemoveVehicle,
+  onRemoveVolunteer,
   canAccept,
   canAssign,
   canStart,
   canComplete,
   canReschedule,
   canCancel,
+  canEdit,
+  canDelete,
+  canSelfAssign,
+  canSelfRemove,
+  canAssignVehicle,
+  canRemoveVehicle,
+  canOverrideRemoveVolunteer,
+  canOverrideRemoveVehicle,
   onClose,
 }: TransportServiceDetailPanelProps) {
   const volunteerList = useMemo(() => {
@@ -298,7 +385,7 @@ export function TransportServiceDetailPanel({
                       variant="outlined"
                       startIcon={<Edit />}
                       sx={workspacePrimaryActionButtonSx}
-                      disabled={isActionSubmitting}
+                      disabled={isActionSubmitting || !canEdit}
                       onClick={onEdit}
                     >
                       Modifica
@@ -307,7 +394,7 @@ export function TransportServiceDetailPanel({
                       variant="outlined"
                       color="error"
                       startIcon={<DeleteOutline />}
-                      disabled={isActionSubmitting}
+                      disabled={isActionSubmitting || !canDelete}
                       onClick={onDelete}
                     >
                       Elimina
@@ -372,6 +459,46 @@ export function TransportServiceDetailPanel({
                         </MenuItem>
                       ))}
                     </Menu>
+                    {canSelfAssign ? (
+                      <Button
+                        variant="contained"
+                        sx={workspacePrimaryActionButtonSx}
+                        disabled={isActionSubmitting}
+                        onClick={onSelfAssign}
+                      >
+                        Assegna me stesso
+                      </Button>
+                    ) : null}
+                    {canSelfRemove ? (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        disabled={isActionSubmitting}
+                        onClick={onSelfRemove}
+                      >
+                        Rimuovi me stesso
+                      </Button>
+                    ) : null}
+                    {canAssignVehicle ? (
+                      <Button
+                        variant="outlined"
+                        sx={workspacePrimaryActionButtonSx}
+                        disabled={isActionSubmitting}
+                        onClick={onAssignVehicle}
+                      >
+                        Assegna/Cambia veicolo
+                      </Button>
+                    ) : null}
+                    {canRemoveVehicle ? (
+                      <Button
+                        variant="outlined"
+                        color={canOverrideRemoveVehicle ? "error" : "inherit"}
+                        disabled={isActionSubmitting}
+                        onClick={onRemoveVehicle}
+                      >
+                        Rimuovi veicolo
+                      </Button>
+                    ) : null}
                   </div>
                 </Stack>
               </ContentCard>
@@ -409,17 +536,23 @@ export function TransportServiceDetailPanel({
                           color="text.secondary"
                           sx={{ fontWeight: 600 }}
                         >
-                          Priorita
+                          Tipologia
                         </Typography>
-                        <Chip
-                          size="small"
-                          label={getTransportPriorityLabel(service.priority)}
-                          sx={{
-                            width: "fit-content",
-                            fontWeight: 700,
-                            ...getTransportPriorityChipSx(service.priority),
-                          }}
-                        />
+                        <Typography
+                          variant="bodyMedium"
+                          sx={{ fontWeight: 500 }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={0.8}
+                            alignItems="center"
+                          >
+                            {getTransportTypeIcon(service.transportType)}
+                            <span>
+                              {getTransportTypeLabel(service.transportType)}
+                            </span>
+                          </Stack>
+                        </Typography>
                       </div>
                       <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
@@ -603,28 +736,120 @@ export function TransportServiceDetailPanel({
               <ContentCard className="bg-white p-5">
                 <Accordion disableGutters elevation={0} defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Typography variant="sectionEyebrow">
-                      Volontari assegnati
-                    </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ minWidth: 0 }}
+                    >
+                      <Typography variant="sectionEyebrow">
+                        Volontari assegnati
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={String(volunteerList.length)}
+                        sx={{
+                          height: 22,
+                          fontWeight: 800,
+                          bgcolor: "rgba(15, 109, 122, 0.12)",
+                          color: "var(--accent-secondary)",
+                        }}
+                      />
+                    </Stack>
                   </AccordionSummary>
                   <AccordionDetails sx={{ px: 0 }}>
                     {volunteerList.length > 0 ? (
-                      <Stack spacing={1}>
+                      <Stack spacing={1.15}>
                         {volunteerList.map((volunteer, index) => (
-                          <Typography
+                          <Box
                             key={volunteer.volunteerId}
-                            variant="bodyMedium"
-                            color="text.secondary"
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1.2,
+                              borderRadius: 2,
+                              border: "1px solid rgba(15, 109, 122, 0.18)",
+                              backgroundColor: "rgba(255, 255, 255, 0.75)",
+                              px: 1.25,
+                              py: 1,
+                            }}
                           >
-                            {index + 1}. {volunteer.name} ·{" "}
-                            {volunteer.roleLabel}
-                          </Typography>
+                            <Avatar
+                              sx={{
+                                width: 30,
+                                height: 30,
+                                bgcolor: "rgba(15, 109, 122, 0.14)",
+                                color: "var(--accent-secondary)",
+                                fontWeight: 800,
+                                fontSize: 12,
+                              }}
+                            >
+                              {getNameInitials(volunteer.name ?? "Volontario")}
+                            </Avatar>
+
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              justifyContent="space-between"
+                              spacing={1}
+                              sx={{ minWidth: 0, flex: 1 }}
+                            >
+                              <Stack sx={{ minWidth: 0 }}>
+                                <Typography
+                                  variant="bodyMedium"
+                                  sx={{ fontWeight: 700 }}
+                                  noWrap
+                                >
+                                  {volunteer.name || `Volontario ${index + 1}`}
+                                </Typography>
+                              </Stack>
+
+                              <Chip
+                                size="small"
+                                label={volunteer.roleLabel}
+                                sx={{
+                                  fontWeight: 700,
+                                  bgcolor:
+                                    volunteer.roleLabel === "Autista"
+                                      ? "rgba(15, 109, 122, 0.15)"
+                                      : "rgba(217, 95, 67, 0.14)",
+                                  color:
+                                    volunteer.roleLabel === "Autista"
+                                      ? "var(--accent-secondary)"
+                                      : "var(--accent)",
+                                }}
+                              />
+                              {canOverrideRemoveVolunteer ? (
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  disabled={isActionSubmitting}
+                                  onClick={() =>
+                                    onRemoveVolunteer(volunteer.volunteerId)
+                                  }
+                                >
+                                  Rimuovi
+                                </Button>
+                              ) : null}
+                            </Stack>
+                          </Box>
                         ))}
                       </Stack>
                     ) : (
-                      <Typography variant="bodySmall" color="text.secondary">
-                        Nessun volontario assegnato al servizio.
-                      </Typography>
+                      <Box
+                        sx={{
+                          borderRadius: 2,
+                          border: "1px dashed rgba(15, 109, 122, 0.28)",
+                          backgroundColor: "rgba(15, 109, 122, 0.04)",
+                          px: 1.5,
+                          py: 1.5,
+                        }}
+                      >
+                        <Typography variant="bodySmall" color="text.secondary">
+                          Nessun volontario assegnato al servizio.
+                        </Typography>
+                      </Box>
                     )}
                   </AccordionDetails>
                 </Accordion>
