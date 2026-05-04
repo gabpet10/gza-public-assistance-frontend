@@ -295,6 +295,15 @@ export function ClientsWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={{ minHeight: 34, px: 1.35 }}
+              onClick={() => exportRowsToExcel(data, gridColumns, "clienti")}
+            >
+              Export Excel
+            </Button>
+            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -342,16 +351,6 @@ export function ClientsWorkspace() {
             searchText={searchText}
             searchPlaceholder="Cerca cliente per nome, telefono, citta o provincia"
             onSearchTextChange={setSearchText}
-            rightActions={
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<FileDownload />}
-                onClick={() => exportRowsToExcel(data, gridColumns, "clienti")}
-              >
-                Export Excel
-              </Button>
-            }
           />
 
           {listError ? (

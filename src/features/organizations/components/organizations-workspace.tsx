@@ -356,6 +356,15 @@ export function OrganizationsWorkspace() {
             <Button
               variant="outlined"
               size="small"
+              startIcon={<FileDownload />}
+              sx={{ minHeight: 34, px: 1.35 }}
+              onClick={() => exportRowsToExcel(data, gridColumns, "organizzazioni")}
+            >
+              Export Excel
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
               startIcon={<Apartment />}
               disabled={
                 !canEnterOrganizationContext || isEnteringOrganizationContext
@@ -415,18 +424,6 @@ export function OrganizationsWorkspace() {
             searchText={searchText}
             searchPlaceholder="Cerca organizzazione, città o partita IVA"
             onSearchTextChange={setSearchText}
-            rightActions={
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<FileDownload />}
-                onClick={() =>
-                  exportRowsToExcel(data, gridColumns, "organizzazioni")
-                }
-              >
-                Export Excel
-              </Button>
-            }
             filters={[
               {
                 key: "status",

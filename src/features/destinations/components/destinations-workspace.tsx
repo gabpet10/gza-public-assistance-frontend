@@ -295,6 +295,15 @@ export function DestinationsWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={{ minHeight: 34, px: 1.35 }}
+              onClick={() => exportRowsToExcel(data, gridColumns, "destinazioni")}
+            >
+              Export Excel
+            </Button>
+            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -342,18 +351,6 @@ export function DestinationsWorkspace() {
             searchText={searchText}
             searchPlaceholder="Cerca destinazione per nome, citta, provincia o descrizione"
             onSearchTextChange={setSearchText}
-            rightActions={
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<FileDownload />}
-                onClick={() =>
-                  exportRowsToExcel(data, gridColumns, "destinazioni")
-                }
-              >
-                Export Excel
-              </Button>
-            }
           />
 
           {listError ? (
