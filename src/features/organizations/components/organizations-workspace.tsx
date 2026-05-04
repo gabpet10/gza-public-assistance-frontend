@@ -358,7 +358,9 @@ export function OrganizationsWorkspace() {
               size="small"
               startIcon={<FileDownload />}
               sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "organizzazioni")}
+              onClick={() =>
+                exportRowsToExcel(data, gridColumns, "organizzazioni")
+              }
             >
               Export Excel
             </Button>

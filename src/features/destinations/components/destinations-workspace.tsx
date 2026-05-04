@@ -299,7 +299,9 @@ export function DestinationsWorkspace() {
               size="small"
               startIcon={<FileDownload />}
               sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "destinazioni")}
+              onClick={() =>
+                exportRowsToExcel(data, gridColumns, "destinazioni")
+              }
             >
               Export Excel
             </Button>
