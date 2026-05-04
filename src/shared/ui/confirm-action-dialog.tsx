@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { workspaceCompactSecondaryActionButtonSx } from "@/shared/ui/workspace-styles";
 
 type ConfirmActionDialogProps = Readonly<{
   open: boolean;
@@ -49,13 +50,21 @@ export function ConfirmActionDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} variant="outlined" disabled={isConfirming}>
+        <Button
+          size="small"
+          onClick={onClose}
+          variant="outlined"
+          sx={workspaceCompactSecondaryActionButtonSx}
+          disabled={isConfirming}
+        >
           Annulla
         </Button>
         <Button
+          size="small"
           onClick={() => void onConfirm()}
           color="error"
           variant="contained"
+          sx={workspaceCompactSecondaryActionButtonSx}
           disabled={isConfirming}
         >
           {isConfirming ? "Operazione in corso..." : confirmLabel}

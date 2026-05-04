@@ -8,15 +8,12 @@ import {
   Button,
   Drawer,
   IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Stack,
   Chip,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ContentCard } from "@/shared/ui/content-card";
 import { LoadingState } from "@/shared/ui/feedback-states";
 import type {
@@ -30,8 +27,9 @@ import {
   getTransportTypeLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
 import {
+  workspaceCompactPrimaryActionButtonSx,
+  workspaceCompactSecondaryActionButtonSx,
   workspaceDetailCloseButtonSx,
-  workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
 import {
   AccessibilityNew,
@@ -39,16 +37,15 @@ import {
   CheckCircleOutline,
   Diversity3,
   DeleteOutline,
+  DirectionsCar,
   Edit,
   EventRepeat,
   ExpandMore,
-  FlagCircle,
   GroupAdd,
   Healing,
   LocalHospital,
   MedicalInformation,
   PlayArrow,
-  PublishedWithChanges,
   SwapHoriz,
   VisibilityOutlined,
 } from "@mui/icons-material";
@@ -60,10 +57,7 @@ type TransportServiceDetailPanelProps = {
   isActionSubmitting: boolean;
   errorMessage?: string | null;
   actionErrorMessage?: string | null;
-  onAccept: () => void;
   onAssign: () => void;
-  onStart: () => void;
-  onComplete: () => void;
   onReschedule: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -72,11 +66,9 @@ type TransportServiceDetailPanelProps = {
   onSelfRemove: () => void;
   onAssignVehicle: () => void;
   onRemoveVehicle: () => void;
+  onAdvanceStatus: () => void;
   onRemoveVolunteer: (volunteerId: string) => void;
-  canAccept: boolean;
   canAssign: boolean;
-  canStart: boolean;
-  canComplete: boolean;
   canReschedule: boolean;
   canCancel: boolean;
   canEdit: boolean;
@@ -85,6 +77,9 @@ type TransportServiceDetailPanelProps = {
   canSelfRemove: boolean;
   canAssignVehicle: boolean;
   canRemoveVehicle: boolean;
+  canAdvanceStatus: boolean;
+  nextStatusLabel: string | null;
+  isVolunteerView: boolean;
   canOverrideRemoveVolunteer: boolean;
   canOverrideRemoveVehicle: boolean;
   onClose: () => void;
@@ -238,10 +233,7 @@ export function TransportServiceDetailPanel({
   isActionSubmitting,
   errorMessage,
   actionErrorMessage,
-  onAccept,
   onAssign,
-  onStart,
-  onComplete,
   onReschedule,
   onEdit,
   onDelete,
@@ -250,11 +242,9 @@ export function TransportServiceDetailPanel({
   onSelfRemove,
   onAssignVehicle,
   onRemoveVehicle,
+  onAdvanceStatus,
   onRemoveVolunteer,
-  canAccept,
   canAssign,
-  canStart,
-  canComplete,
   canReschedule,
   canCancel,
   canEdit,
@@ -263,96 +253,33 @@ export function TransportServiceDetailPanel({
   canSelfRemove,
   canAssignVehicle,
   canRemoveVehicle,
+  canAdvanceStatus,
+  nextStatusLabel,
+  isVolunteerView,
   canOverrideRemoveVolunteer,
   canOverrideRemoveVehicle,
   onClose,
 }: TransportServiceDetailPanelProps) {
+  const isExecutionOrClosedStatus =
+    service?.status === "in_progress" ||
+    service?.status === "completed" ||
+    service?.status === "cancelled";
+
   const volunteerList = useMemo(() => {
     if (!service) {
       return [];
     }
 
-    if (service.volunteers.length > 0) {
-      return service.volunteers.map((volunteer) => ({
-        volunteerId: volunteer.volunteerId,
-        name: volunteer.fullName.trim(),
-        roleLabel: getVolunteerRoleLabel(volunteer.role),
-      }));
-    }
-
-    const fallbackSource =
-      service.assignedVolunteerIds.length > 0
-        ? service.assignedVolunteerIds
-        : service.assignedVolunteerNames;
-
-    return fallbackSource.map((_, index) => ({
-      volunteerId: service.assignedVolunteerIds[index] ?? `${index}`,
-      name: service.assignedVolunteerNames[index]?.trim(),
-      roleLabel: index === 0 ? "Autista" : "Accompagnatore",
+    return service.volunteers.map((volunteer) => ({
+      volunteerId: volunteer.volunteerId,
+      name: volunteer.fullName.trim(),
+      roleLabel: getVolunteerRoleLabel(volunteer.role),
     }));
   }, [service]);
-  const [actionsAnchorEl, setActionsAnchorEl] = useState<HTMLElement | null>(
-    null,
-  );
-
-  const availableActions = useMemo(
-    () => [
-      {
-        key: "accept",
-        label: "Accetta",
-        enabled: canAccept,
-        run: onAccept,
-        icon: <CheckCircleOutline fontSize="small" />,
-      },
-      {
-        key: "assign",
-        label: "Assegna risorse",
-        enabled: canAssign,
-        run: onAssign,
-        icon: <GroupAdd fontSize="small" />,
-      },
-      {
-        key: "start",
-        label: "Avvia",
-        enabled: canStart,
-        run: onStart,
-        icon: <PlayArrow fontSize="small" />,
-      },
-      {
-        key: "complete",
-        label: "Completa",
-        enabled: canComplete,
-        run: onComplete,
-        icon: <FlagCircle fontSize="small" />,
-      },
-      {
-        key: "cancel",
-        label: "Annulla servizio",
-        enabled: canCancel,
-        run: onCancelService,
-        danger: true,
-        icon: <DeleteOutline fontSize="small" />,
-      },
-    ],
-    [
-      canAccept,
-      canAssign,
-      canCancel,
-      canComplete,
-      canStart,
-      onAccept,
-      onAssign,
-      onCancelService,
-      onComplete,
-      onStart,
-    ],
-  );
-  const actionableItems = availableActions.filter((action) => action.enabled);
-
   return (
     <Drawer anchor="right" open={open} onClose={onClose}>
-      <div className="h-full w-[min(100vw,680px)] overflow-y-auto bg-[#fffdfa] p-6">
-        <Stack spacing={2.5}>
+      <div className="h-full w-[min(100vw,680px)] overflow-y-auto bg-[#fffdfa] p-4 md:p-5">
+        <Stack spacing={2}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Typography variant="sectionEyebrow">
@@ -370,140 +297,98 @@ export function TransportServiceDetailPanel({
           {isLoading ? (
             <LoadingState message="Caricamento dettaglio servizio..." />
           ) : null}
-          {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+          {errorMessage && !service ? (
+            <Alert severity="error">{errorMessage}</Alert>
+          ) : null}
           {actionErrorMessage ? (
             <Alert severity="warning">{actionErrorMessage}</Alert>
           ) : null}
 
           {service ? (
             <>
-              <ContentCard className="bg-white p-5">
+              <ContentCard className="bg-white p-4">
                 <Stack spacing={1.5}>
                   <Typography variant="sectionEyebrow">Azioni</Typography>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outlined"
-                      startIcon={<Edit />}
-                      sx={workspacePrimaryActionButtonSx}
-                      disabled={isActionSubmitting || !canEdit}
-                      onClick={onEdit}
-                    >
-                      Modifica
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      startIcon={<DeleteOutline />}
-                      disabled={isActionSubmitting || !canDelete}
-                      onClick={onDelete}
-                    >
-                      Elimina
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      startIcon={<EventRepeat />}
-                      sx={workspacePrimaryActionButtonSx}
-                      disabled={!canReschedule || isActionSubmitting}
-                      onClick={onReschedule}
-                    >
-                      Ripianifica
-                    </Button>
-                    <Button
-                      variant="contained"
-                      startIcon={<PublishedWithChanges />}
-                      sx={workspacePrimaryActionButtonSx}
-                      disabled={
-                        actionableItems.length === 0 || isActionSubmitting
-                      }
-                      onClick={(event) => {
-                        setActionsAnchorEl(event.currentTarget);
-                      }}
-                    >
-                      Cambia stato
-                    </Button>
-                    <Menu
-                      anchorEl={actionsAnchorEl}
-                      open={Boolean(actionsAnchorEl)}
-                      PaperProps={{
-                        sx: {
-                          borderRadius: 2,
-                          border: "1px solid",
-                          borderColor: "divider",
-                          boxShadow: "0 10px 30px rgba(8,19,31,0.12)",
-                          minWidth: 220,
-                        },
-                      }}
-                      onClose={() => setActionsAnchorEl(null)}
-                    >
-                      {actionableItems.map((action) => (
-                        <MenuItem
-                          key={action.key}
-                          onClick={() => {
-                            setActionsAnchorEl(null);
-                            action.run();
-                          }}
-                          sx={
-                            action.danger ? { color: "error.main" } : undefined
-                          }
-                        >
-                          <ListItemIcon
-                            sx={
-                              action.danger
-                                ? { color: "error.main" }
-                                : undefined
-                            }
+                    {isVolunteerView ? (
+                      <>
+                        {canSelfAssign ? (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<CheckCircleOutline />}
+                            sx={workspaceCompactPrimaryActionButtonSx}
+                            disabled={isActionSubmitting}
+                            onClick={onSelfAssign}
                           >
-                            {action.icon}
-                          </ListItemIcon>
-                          <ListItemText primary={action.label} />
-                        </MenuItem>
-                      ))}
-                    </Menu>
-                    {canSelfAssign ? (
-                      <Button
-                        variant="contained"
-                        sx={workspacePrimaryActionButtonSx}
-                        disabled={isActionSubmitting}
-                        onClick={onSelfAssign}
-                      >
-                        Assegna me stesso
-                      </Button>
-                    ) : null}
-                    {canSelfRemove ? (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        disabled={isActionSubmitting}
-                        onClick={onSelfRemove}
-                      >
-                        Rimuovi me stesso
-                      </Button>
-                    ) : null}
-                    {canAssignVehicle ? (
-                      <Button
-                        variant="outlined"
-                        sx={workspacePrimaryActionButtonSx}
-                        disabled={isActionSubmitting}
-                        onClick={onAssignVehicle}
-                      >
-                        Assegna/Cambia veicolo
-                      </Button>
-                    ) : null}
-                    {canRemoveVehicle ? (
-                      <Button
-                        variant="outlined"
-                        color={canOverrideRemoveVehicle ? "error" : "inherit"}
-                        disabled={isActionSubmitting}
-                        onClick={onRemoveVehicle}
-                      >
-                        Rimuovi veicolo
-                      </Button>
-                    ) : null}
+                            Accetta servizio
+                          </Button>
+                        ) : null}
+                        {canSelfRemove ? (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            startIcon={<DeleteOutline />}
+                            sx={workspaceCompactSecondaryActionButtonSx}
+                            disabled={isActionSubmitting}
+                            onClick={onSelfRemove}
+                          >
+                            Rinuncia al servizio
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<Edit />}
+                          sx={workspaceCompactPrimaryActionButtonSx}
+                          disabled={isActionSubmitting || !canEdit}
+                          onClick={onEdit}
+                        >
+                          Modifica
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="error"
+                          startIcon={<DeleteOutline />}
+                          sx={workspaceCompactSecondaryActionButtonSx}
+                          disabled={isActionSubmitting || !canDelete}
+                          onClick={onDelete}
+                        >
+                          Elimina
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<GroupAdd />}
+                          sx={workspaceCompactPrimaryActionButtonSx}
+                          disabled={isActionSubmitting || !canAssign}
+                          onClick={onAssign}
+                        >
+                          Assegna volontari
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="error"
+                          startIcon={<DeleteOutline />}
+                          sx={workspaceCompactSecondaryActionButtonSx}
+                          disabled={isActionSubmitting || !canCancel}
+                          onClick={onCancelService}
+                        >
+                          Annulla servizio
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </Stack>
               </ContentCard>
 
-              <ContentCard className="bg-white p-5">
+              <ContentCard className="bg-white p-4">
                 <Accordion disableGutters elevation={0} defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Typography variant="sectionEyebrow">
@@ -512,7 +397,7 @@ export function TransportServiceDetailPanel({
                   </AccordionSummary>
                   <AccordionDetails sx={{ px: 0 }}>
                     <div className="overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[#f7f9fc]">
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -520,17 +405,60 @@ export function TransportServiceDetailPanel({
                         >
                           Stato
                         </Typography>
-                        <Chip
-                          size="small"
-                          label={getTransportStatusLabel(service.status)}
-                          sx={{
-                            width: "fit-content",
-                            fontWeight: 700,
-                            ...getTransportStatusChipSx(service.status),
-                          }}
-                        />
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip
+                            size="small"
+                            label={getTransportStatusLabel(service.status)}
+                            sx={{
+                              width: "fit-content",
+                              fontWeight: 700,
+                              ...getTransportStatusChipSx(service.status),
+                            }}
+                          />
+                          {!isVolunteerView && canAdvanceStatus ? (
+                            <Tooltip
+                              title={
+                                nextStatusLabel
+                                  ? `Avanza a ${nextStatusLabel}`
+                                  : "Avanza"
+                              }
+                            >
+                              <span style={{ marginLeft: "auto" }}>
+                                <IconButton
+                                  size="small"
+                                  aria-label={
+                                    nextStatusLabel
+                                      ? `Avanza a ${nextStatusLabel}`
+                                      : "Avanza"
+                                  }
+                                  sx={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: "50%",
+                                    color: "#ffffff",
+                                    backgroundColor: "var(--accent-secondary)",
+                                    "&:hover": {
+                                      backgroundColor:
+                                        "var(--accent-secondary)",
+                                      opacity: 0.9,
+                                    },
+                                    "&.Mui-disabled": {
+                                      backgroundColor:
+                                        "rgba(15, 109, 122, 0.24)",
+                                      color: "rgba(255, 255, 255, 0.7)",
+                                    },
+                                  }}
+                                  disabled={isActionSubmitting}
+                                  onClick={onAdvanceStatus}
+                                >
+                                  <PlayArrow fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          ) : null}
+                        </Stack>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -554,7 +482,7 @@ export function TransportServiceDetailPanel({
                           </Stack>
                         </Typography>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -569,7 +497,7 @@ export function TransportServiceDetailPanel({
                           {service.clientDisplayName || service.clientId || "-"}
                         </Typography>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -584,7 +512,7 @@ export function TransportServiceDetailPanel({
                           {getDestinationLabel(service) || "-"}
                         </Typography>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -599,7 +527,7 @@ export function TransportServiceDetailPanel({
                           {getPickupLabel(service) || "-"}
                         </Typography>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -623,7 +551,7 @@ export function TransportServiceDetailPanel({
                             : "Non a pagamento"}
                         </Typography>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -631,16 +559,104 @@ export function TransportServiceDetailPanel({
                         >
                           Veicolo
                         </Typography>
-                        <Typography
-                          variant="bodyMedium"
-                          sx={{ fontWeight: 500 }}
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          justifyContent="space-between"
+                          sx={{ width: "100%", minWidth: 0 }}
                         >
-                          {service.vehicleDisplayName ||
-                            service.vehicleId ||
-                            "-"}
-                        </Typography>
+                          <Typography
+                            variant="bodyMedium"
+                            sx={{ fontWeight: 500, minWidth: 0, pr: 1 }}
+                            noWrap
+                          >
+                            {service.vehicleDisplayName ||
+                              service.vehicleId ||
+                              "-"}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                            sx={{ flexShrink: 0 }}
+                          >
+                            {canAssignVehicle ? (
+                              <Tooltip title="Cambia veicolo">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    aria-label="Cambia veicolo"
+                                    sx={{
+                                      width: 30,
+                                      height: 30,
+                                      borderRadius: "50%",
+                                      color: "#ffffff",
+                                      backgroundColor:
+                                        "var(--accent-secondary)",
+                                      "&:hover": {
+                                        backgroundColor:
+                                          "var(--accent-secondary)",
+                                        opacity: 0.9,
+                                      },
+                                      "&.Mui-disabled": {
+                                        backgroundColor:
+                                          "rgba(15, 109, 122, 0.24)",
+                                        color: "rgba(255, 255, 255, 0.7)",
+                                      },
+                                    }}
+                                    disabled={
+                                      isActionSubmitting ||
+                                      isExecutionOrClosedStatus
+                                    }
+                                    onClick={onAssignVehicle}
+                                  >
+                                    <DirectionsCar fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                            {canRemoveVehicle ? (
+                              <Tooltip title="Rimuovi veicolo">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    aria-label="Rimuovi veicolo"
+                                    data-can-override={
+                                      canOverrideRemoveVehicle
+                                        ? "true"
+                                        : "false"
+                                    }
+                                    sx={{
+                                      width: 30,
+                                      height: 30,
+                                      borderRadius: "50%",
+                                      color: "#ffffff",
+                                      backgroundColor: "#c62828",
+                                      "&:hover": {
+                                        backgroundColor: "#b71c1c",
+                                      },
+                                      "&.Mui-disabled": {
+                                        backgroundColor:
+                                          "rgba(198, 40, 40, 0.32)",
+                                        color: "rgba(255, 255, 255, 0.7)",
+                                      },
+                                    }}
+                                    disabled={
+                                      isActionSubmitting ||
+                                      isExecutionOrClosedStatus
+                                    }
+                                    onClick={onRemoveVehicle}
+                                  >
+                                    <DeleteOutline fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                          </Stack>
+                        </Stack>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -648,17 +664,58 @@ export function TransportServiceDetailPanel({
                         >
                           Pianificato per
                         </Typography>
-                        <Typography
-                          variant="bodyMedium"
-                          sx={{ fontWeight: 500 }}
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          sx={{ width: "100%" }}
                         >
-                          {formatPlannedWindow(
-                            service.scheduledAt,
-                            service.scheduledEnd,
-                          )}
-                        </Typography>
+                          <Typography
+                            variant="bodyMedium"
+                            sx={{ fontWeight: 500 }}
+                          >
+                            {formatPlannedWindow(
+                              service.scheduledAt,
+                              service.scheduledEnd,
+                            )}
+                          </Typography>
+                          {!isVolunteerView && canReschedule ? (
+                            <Tooltip title="Sposta servizio">
+                              <span style={{ marginLeft: "auto" }}>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Sposta servizio"
+                                  sx={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: "50%",
+                                    color: "#ffffff",
+                                    backgroundColor: "var(--accent-secondary)",
+                                    "&:hover": {
+                                      backgroundColor:
+                                        "var(--accent-secondary)",
+                                      opacity: 0.9,
+                                    },
+                                    "&.Mui-disabled": {
+                                      backgroundColor:
+                                        "rgba(15, 109, 122, 0.24)",
+                                      color: "rgba(255, 255, 255, 0.7)",
+                                    },
+                                  }}
+                                  disabled={
+                                    isActionSubmitting ||
+                                    isExecutionOrClosedStatus
+                                  }
+                                  onClick={onReschedule}
+                                >
+                                  <EventRepeat fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          ) : null}
+                        </Stack>
                       </div>
-                      <div className="grid grid-cols-[170px,1fr] items-start gap-4 px-4 py-3">
+                      <div className="grid grid-cols-[170px,1fr] items-center gap-4 px-4 py-3">
                         <Typography
                           variant="bodySmall"
                           color="text.secondary"
@@ -678,7 +735,7 @@ export function TransportServiceDetailPanel({
                 </Accordion>
               </ContentCard>
 
-              <ContentCard className="bg-white p-5">
+              <ContentCard className="bg-white p-4">
                 <Accordion disableGutters elevation={0}>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Typography variant="sectionEyebrow">
@@ -701,7 +758,7 @@ export function TransportServiceDetailPanel({
                         return (
                           <div
                             key={status}
-                            className={`grid grid-cols-[170px,1fr] items-start gap-4 px-4 py-3 ${
+                            className={`grid grid-cols-[170px,1fr] items-center gap-4 px-4 py-3 ${
                               index < allStatuses.length - 1
                                 ? "border-b border-[color:var(--border-soft)]"
                                 : ""
@@ -733,7 +790,7 @@ export function TransportServiceDetailPanel({
                 </Accordion>
               </ContentCard>
 
-              <ContentCard className="bg-white p-5">
+              <ContentCard className="bg-white p-4">
                 <Accordion disableGutters elevation={0} defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Stack
@@ -820,17 +877,34 @@ export function TransportServiceDetailPanel({
                                 }}
                               />
                               {canOverrideRemoveVolunteer ? (
-                                <Button
+                                <IconButton
                                   size="small"
-                                  color="error"
-                                  variant="outlined"
-                                  disabled={isActionSubmitting}
+                                  sx={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: "50%",
+                                    color: "#ffffff",
+                                    backgroundColor: "#c62828",
+                                    "&:hover": {
+                                      backgroundColor: "#b71c1c",
+                                    },
+                                    "&.Mui-disabled": {
+                                      backgroundColor:
+                                        "rgba(198, 40, 40, 0.32)",
+                                      color: "rgba(255, 255, 255, 0.7)",
+                                    },
+                                  }}
+                                  disabled={
+                                    isActionSubmitting ||
+                                    !canOverrideRemoveVolunteer
+                                  }
                                   onClick={() =>
                                     onRemoveVolunteer(volunteer.volunteerId)
                                   }
+                                  aria-label="Rimuovi volontario"
                                 >
-                                  Rimuovi
-                                </Button>
+                                  <DeleteOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
                               ) : null}
                             </Stack>
                           </Box>

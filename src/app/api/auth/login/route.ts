@@ -13,14 +13,28 @@ import { enrichSessionOrganizationContext } from "@/core/auth/server/organizatio
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
-  const backendResponse = await fetch(buildBackendUrl("/api/auth/login"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body,
-    cache: "no-store",
-  });
+  let backendResponse: Response;
+
+  try {
+    backendResponse = await fetch(buildBackendUrl("/api/auth/login"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body,
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        title: "Bad Gateway",
+        detail:
+          "Login non riuscito: backend auth non raggiungibile dall'app frontend.",
+        status: 502,
+      },
+      { status: 502 },
+    );
+  }
 
   if (!backendResponse.ok) {
     return createProxyResponse(backendResponse);

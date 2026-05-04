@@ -331,7 +331,7 @@ export function toServiceFallbackFromCalendarEvent(
     volunteers,
     assignedVolunteerIds,
     assignedVolunteerNames,
-    teamMemberCount: event.teamMemberCount ?? volunteers.length,
+    teamMemberCount: event.teamMemberCount,
     acceptedAt: null,
     assignedAt: event.assignedAt,
     startedAt: null,

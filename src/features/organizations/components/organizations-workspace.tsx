@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Add, Apartment, DeleteOutline, Edit } from "@mui/icons-material";
+import {
+  Add,
+  Apartment,
+  DeleteOutline,
+  Edit,
+  FileDownload,
+} from "@mui/icons-material";
 import { Avatar, Box, Button, Chip, Stack, Typography } from "@mui/material";
 import {
   DataGrid,
@@ -23,6 +29,7 @@ import {
   toOrganizationActiveFilter,
   updateOrganization,
 } from "@/features/organizations/api/organizations-api";
+import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import type {
   Organization,
   OrganizationFormData,
@@ -65,6 +72,7 @@ function getNameInitial(name: string) {
 }
 
 export function OrganizationsWorkspace() {
+  const { exportRowsToExcel } = useExcelExport();
   const router = useRouter();
   const { session, enterOrganizationContext } = useAuth();
   const {
@@ -325,18 +333,18 @@ export function OrganizationsWorkspace() {
   };
 
   return (
-    <Stack spacing={4}>
-      <ContentCard className="overflow-hidden p-0">
+    <Stack spacing={2.5}>
+      <ContentCard className="overflow-hidden p-2 md:p-2.5">
         <div className="flex flex-col  md:flex-row md:items-center md:justify-between ">
           <div className="flex min-w-0 items-center gap-3">
             <Box sx={workspaceHeaderIconSx}>
-              <Apartment sx={{ fontSize: 24 }} />
+              <Apartment sx={{ fontSize: 18 }} />
             </Box>
             <div className="flex min-w-0 flex-col ">
               <Typography
                 variant="sectionEyebrow"
                 sx={{
-                  fontSize: 16,
+                  fontSize: 13,
                 }}
               >
                 Organizzazioni
@@ -347,10 +355,12 @@ export function OrganizationsWorkspace() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outlined"
+              size="small"
               startIcon={<Apartment />}
               disabled={
                 !canEnterOrganizationContext || isEnteringOrganizationContext
               }
+              sx={{ minHeight: 34, px: 1.35 }}
               onClick={handleEnterOrganization}
             >
               {isEnteringOrganizationContext
@@ -359,26 +369,38 @@ export function OrganizationsWorkspace() {
             </Button>
             <Button
               variant="contained"
+              size="small"
               startIcon={<Add />}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={createDialog.open}
             >
               Nuova
             </Button>
             <Button
               variant="contained"
+              size="small"
               startIcon={<Edit />}
               disabled={!canEditOrDelete}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={editDialog.open}
             >
               Modifica
             </Button>
             <Button
               variant="contained"
+              size="small"
               color="error"
               startIcon={<DeleteOutline />}
               disabled={!canEditOrDelete}
+              sx={{ minHeight: 34, px: 1.35 }}
               onClick={deleteDialog.open}
             >
               Elimina
@@ -387,12 +409,24 @@ export function OrganizationsWorkspace() {
         </div>
       </ContentCard>
 
-      <ContentCard>
+      <ContentCard className="p-2 md:p-2.5">
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca organizzazione, città o partita IVA"
             onSearchTextChange={setSearchText}
+            rightActions={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileDownload />}
+                onClick={() =>
+                  exportRowsToExcel(data, gridColumns, "organizzazioni")
+                }
+              >
+                Export Excel
+              </Button>
+            }
             filters={[
               {
                 key: "status",

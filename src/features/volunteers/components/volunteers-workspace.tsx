@@ -6,6 +6,7 @@ import {
   CheckCircleOutline,
   DeleteOutline,
   Edit,
+  FileDownload,
   Link,
   PlaylistAdd,
   RadioButtonUnchecked,
@@ -35,6 +36,7 @@ import {
   getProblemMessage,
 } from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
+import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
@@ -53,6 +55,8 @@ import {
   workspaceDetailActionIconSx,
 } from "@/shared/ui/data-grid/workspace-data-grid-styles";
 import {
+  workspaceCompactPrimaryActionButtonSx,
+  workspaceCompactSecondaryActionButtonSx,
   workspaceDetailCloseButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
@@ -183,6 +187,7 @@ const baseGridColumns: GridColDef<VolunteerListItem>[] = [
 ];
 
 export function VolunteersWorkspace() {
+  const { exportRowsToExcel } = useExcelExport();
   const { session } = useAuth();
   const scopedOrganizationId =
     session?.activeOrganizationId ?? session?.memberships?.[0]?.organizationId;
@@ -743,15 +748,15 @@ export function VolunteersWorkspace() {
   };
 
   return (
-    <Stack spacing={4}>
-      <ContentCard className="overflow-hidden p-0">
+    <Stack spacing={2.5}>
+      <ContentCard className="overflow-hidden p-2 md:p-2.5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between ">
           <div className="flex min-w-0 items-center gap-3">
             <Box sx={workspaceHeaderIconSx}>
-              <VolunteerActivism sx={{ fontSize: 24 }} />
+              <VolunteerActivism sx={{ fontSize: 18 }} />
             </Box>
             <div className="flex min-w-0 flex-col">
-              <Typography variant="sectionEyebrow" sx={{ fontSize: 16 }}>
+              <Typography variant="sectionEyebrow" sx={{ fontSize: 13 }}>
                 Volontari
               </Typography>
             </div>
@@ -760,26 +765,38 @@ export function VolunteersWorkspace() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="contained"
+              size="small"
               startIcon={<Add />}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsCreateDialogOpen(true)}
             >
               Nuovo
             </Button>
             <Button
               variant="contained"
+              size="small"
               startIcon={<Edit />}
               disabled={!canEditOrDelete}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsEditDialogOpen(true)}
             >
               Modifica
             </Button>
             <Button
               variant="contained"
+              size="small"
               color="error"
               startIcon={<DeleteOutline />}
               disabled={!canEditOrDelete}
+              sx={{ minHeight: 34, px: 1.35 }}
               onClick={() => {
                 setConfirmError(null);
                 setIsDeleteVolunteerDialogOpen(true);
@@ -791,12 +808,24 @@ export function VolunteersWorkspace() {
         </div>
       </ContentCard>
 
-      <ContentCard>
+      <ContentCard className="p-2 md:p-2.5">
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca volontario per nome, codice fiscale o telefono"
             onSearchTextChange={setSearchText}
+            rightActions={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileDownload />}
+                onClick={() =>
+                  exportRowsToExcel(data, gridColumns, "volontari")
+                }
+              >
+                Export Excel
+              </Button>
+            }
             filters={[
               {
                 key: "status",
@@ -853,8 +882,8 @@ export function VolunteersWorkspace() {
         open={Boolean(openedVolunteerId)}
         onClose={() => setOpenedVolunteerId(null)}
       >
-        <div className="h-full w-[min(100vw,680px)] bg-[#fffdfa] p-6">
-          <Stack spacing={2.5}>
+        <div className="h-full w-[min(100vw,680px)] bg-[#fffdfa] p-4 md:p-5">
+          <Stack spacing={2}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Typography variant="sectionEyebrow">Dettaglio</Typography>
@@ -885,42 +914,47 @@ export function VolunteersWorkspace() {
             ) : null}
 
             {selectedVolunteer ? (
-              <Stack spacing={2.5}>
+              <Stack spacing={2}>
                 <div className="grid gap-3">
-                  <ContentCard className="bg-white p-5">
+                  <ContentCard className="bg-white p-4">
                     <Stack spacing={1.5}>
                       <Typography variant="sectionEyebrow">Azioni</Typography>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
+                          size="small"
                           variant="contained"
                           startIcon={<Edit />}
                           disabled={!canEditOrDelete}
-                          sx={workspacePrimaryActionButtonSx}
+                          sx={workspaceCompactPrimaryActionButtonSx}
                           onClick={() => setIsEditDialogOpen(true)}
                         >
                           Modifica
                         </Button>
                         <Button
+                          size="small"
                           variant="contained"
                           startIcon={<Link />}
-                          sx={workspacePrimaryActionButtonSx}
+                          sx={workspaceCompactPrimaryActionButtonSx}
                           onClick={handleOpenLinkUserDialog}
                         >
                           Collega utente
                         </Button>
                         <Button
+                          size="small"
                           variant="contained"
                           startIcon={<PlaylistAdd />}
-                          sx={workspacePrimaryActionButtonSx}
+                          sx={workspaceCompactPrimaryActionButtonSx}
                           onClick={() => setIsSkillCreateDialogOpen(true)}
                         >
                           Aggiungi skill
                         </Button>
                         <Button
+                          size="small"
                           variant="contained"
                           color="error"
                           startIcon={<DeleteOutline />}
                           disabled={!canEditOrDelete}
+                          sx={workspaceCompactSecondaryActionButtonSx}
                           onClick={() => {
                             setConfirmError(null);
                             setIsDeleteVolunteerDialogOpen(true);
@@ -932,7 +966,7 @@ export function VolunteersWorkspace() {
                     </Stack>
                   </ContentCard>
 
-                  <ContentCard className="bg-white p-5">
+                  <ContentCard className="bg-white p-4">
                     <Stack spacing={1.5}>
                       <Typography variant="sectionEyebrow">
                         Anagrafica
@@ -1031,9 +1065,31 @@ export function VolunteersWorkspace() {
                   </ContentCard>
                 </div>
 
-                <ContentCard className="bg-white p-5">
+                <ContentCard className="bg-white p-4">
                   <Stack spacing={2}>
-                    <Typography variant="sectionEyebrow">Skills</Typography>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "stretch", sm: "center" }}
+                    >
+                      <Typography variant="sectionEyebrow">Skills</Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<FileDownload />}
+                        disabled={!selectedVolunteer?.skills.length}
+                        onClick={() =>
+                          exportRowsToExcel(
+                            selectedVolunteer?.skills ?? [],
+                            skillGridColumns,
+                            "volontari-skills",
+                          )
+                        }
+                      >
+                        Export Excel
+                      </Button>
+                    </Stack>
                     {selectedVolunteer.skills.length ? (
                       <DataGrid
                         className="volunteer-skill-grid"

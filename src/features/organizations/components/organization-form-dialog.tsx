@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -21,6 +22,10 @@ import {
 } from "@mui/material";
 import { Apartment, UploadFile } from "@mui/icons-material";
 import { getProblemMessage } from "@/core/api/errors";
+import {
+  normalizeSearchText,
+  useItalianRegions,
+} from "@/core/geo/italian-address-data";
 import type { OrganizationFormData } from "@/features/organizations/api/types";
 import {
   FeatureDialogTitle,
@@ -28,6 +33,7 @@ import {
   formDialogContentSx,
   formDialogPrimaryActionSx,
 } from "@/shared/ui/form-dialog-frame";
+import { ItalianMunicipalityAutocomplete } from "@/shared/ui/italian-municipality-autocomplete";
 
 const wizardSteps = ["Organizzazione", "Operatore"] as const;
 
@@ -93,6 +99,7 @@ export function OrganizationFormDialog({
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { options: regions } = useItalianRegions();
 
   useEffect(() => {
     if (!open) {
@@ -107,6 +114,16 @@ export function OrganizationFormDialog({
   const title = useMemo(
     () => (isEditMode ? "Modifica organizzazione" : "Nuova organizzazione"),
     [isEditMode],
+  );
+
+  const selectedRegionOption = useMemo(
+    () =>
+      regions.find(
+        (region) =>
+          normalizeSearchText(region.name) ===
+          normalizeSearchText(formValues.region),
+      ) ?? null,
+    [formValues.region, regions],
   );
 
   const handleFieldChange = <T extends keyof OrganizationFormData>(
@@ -264,19 +281,44 @@ export function OrganizationFormDialog({
                     handleFieldChange("address", event.target.value)
                   }
                 />
-                <TextField
-                  label="Citta"
+                <ItalianMunicipalityAutocomplete
+                  label="Comune"
                   value={formValues.city}
-                  onChange={(event) =>
-                    handleFieldChange("city", event.target.value)
-                  }
+                  onCityChange={(value) => handleFieldChange("city", value)}
+                  onMunicipalitySelected={(option) => {
+                    if (option?.region) {
+                      handleFieldChange("region", option.region);
+                    }
+                  }}
                 />
-                <TextField
-                  label="Regione"
-                  value={formValues.region}
-                  onChange={(event) =>
-                    handleFieldChange("region", event.target.value)
+                <Autocomplete
+                  freeSolo
+                  options={regions}
+                  value={selectedRegionOption ?? formValues.region}
+                  getOptionLabel={(option) =>
+                    typeof option === "string" ? option : option.name
                   }
+                  onInputChange={(_, nextInputValue, reason) => {
+                    if (reason === "input") {
+                      handleFieldChange("region", nextInputValue);
+                    }
+                  }}
+                  onChange={(_, option) => {
+                    if (!option) {
+                      handleFieldChange("region", "");
+                      return;
+                    }
+
+                    if (typeof option === "string") {
+                      handleFieldChange("region", option);
+                      return;
+                    }
+
+                    handleFieldChange("region", option.name);
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Regione" />
+                  )}
                 />
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Button

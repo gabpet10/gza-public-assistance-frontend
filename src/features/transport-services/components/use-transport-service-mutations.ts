@@ -26,7 +26,7 @@ import {
   toConflictMessage,
   toScheduleUpdatePayload,
   toServiceDurationMs,
-} from "./transport-services-workspace.helpers";
+} from "./transport-services-workspace-helpers";
 
 type ActionToast = {
   message: string;
@@ -237,10 +237,19 @@ export function useTransportServiceMutations({
     scheduledAt: string,
     scheduledEnd: string | null,
     nextScheduledAt: string,
+    nextScheduledEnd: string | null,
     expectedVersion?: number,
   ) => {
     const parsedStart = new Date(nextScheduledAt).getTime();
-    const durationMs = toServiceDurationMs(scheduledAt, scheduledEnd);
+    const parsedEnd =
+      nextScheduledEnd && nextScheduledEnd.trim().length > 0
+        ? new Date(nextScheduledEnd).getTime()
+        : null;
+
+    const durationMs =
+      parsedEnd !== null && !Number.isNaN(parsedEnd)
+        ? parsedEnd - parsedStart
+        : toServiceDurationMs(scheduledAt, scheduledEnd);
 
     return executeServiceAction(
       () =>

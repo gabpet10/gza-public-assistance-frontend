@@ -200,8 +200,13 @@ const wizardSteps = [
   "Risorse",
 ] as const;
 
+const editableServiceStatuses: TransportServiceStatus[] = [
+  "pending",
+  "accepted",
+];
+
 const wizardStepMinHeightSx = {
-  minHeight: { xs: 420, md: 430 },
+  minHeight: { xs: 320, md: 340 },
 };
 
 function normalizeInitialValues(
@@ -231,6 +236,18 @@ function validateResources(values: TransportServiceFormData): string | null {
   }
 
   return "Per salvare le risorse devi selezionare sia veicolo sia almeno un volontario.";
+}
+
+function shouldClearAssignedVolunteers(status: TransportServiceStatus) {
+  return status === "pending" || status === "accepted";
+}
+
+function normalizeStatusFromResources(values: TransportServiceFormData) {
+  if (values.volunteerIds.length > 0) {
+    return "assigned" as TransportServiceStatus;
+  }
+
+  return values.serviceStatus === "pending" ? "pending" : "accepted";
 }
 
 export function TransportServiceFormDialog({
@@ -264,12 +281,11 @@ export function TransportServiceFormDialog({
   }, [initialValues, open]);
 
   const currentStatus = useMemo<TransportServiceStatus>(() => {
-    if (mode === "edit") {
-      return formValues.serviceStatus;
-    }
-
     return formValues.serviceStatus;
-  }, [formValues.serviceStatus, mode]);
+  }, [formValues.serviceStatus]);
+
+  const canEditStatus =
+    currentStatus !== "completed" && currentStatus !== "cancelled";
 
   const title = useMemo(
     () => (mode === "create" ? "Nuovo servizio" : "Modifica servizio"),
@@ -374,7 +390,17 @@ export function TransportServiceFormDialog({
     setIsSubmitting(true);
 
     try {
-      await onSubmit(formValues);
+      const submitValues: TransportServiceFormData = {
+        ...formValues,
+        serviceStatus:
+          formValues.volunteerIds.length > 0
+            ? "assigned"
+            : formValues.serviceStatus === "pending"
+              ? "pending"
+              : "accepted",
+      };
+
+      await onSubmit(submitValues);
       onClose();
     } catch (error) {
       setSubmitError(
@@ -393,7 +419,7 @@ export function TransportServiceFormDialog({
       maxWidth="sm"
       PaperProps={{
         sx: {
-          minHeight: { xs: 760, md: 780 },
+          minHeight: { xs: 660, md: 700 },
         },
       }}
     >
@@ -407,12 +433,24 @@ export function TransportServiceFormDialog({
         <DialogContent
           sx={{
             ...formDialogContentSx,
-            minHeight: { xs: 610, md: 620 },
+            minHeight: { xs: 500, md: 530 },
           }}
         >
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Stack spacing={2.5} sx={{ pt: 1.5 }}>
-              <Stepper activeStep={activeStep} alternativeLabel>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Stepper
+                activeStep={activeStep}
+                alternativeLabel
+                sx={{
+                  mb: 0.5,
+                  "& .MuiStepLabel-label": {
+                    fontSize: "0.78rem",
+                  },
+                  "& .MuiStepIcon-root": {
+                    fontSize: "1.15rem",
+                  },
+                }}
+              >
                 {wizardSteps.map((step) => (
                   <Step key={step}>
                     <StepLabel>{step}</StepLabel>
@@ -425,7 +463,7 @@ export function TransportServiceFormDialog({
               ) : null}
 
               {activeStep === 0 ? (
-                <Stack spacing={2.5} sx={wizardStepMinHeightSx}>
+                <Stack spacing={2} sx={wizardStepMinHeightSx}>
                   <Divider />
                   <Typography variant="sectionEyebrow" sx={{ fontSize: 11 }}>
                     Cliente
@@ -564,7 +602,7 @@ export function TransportServiceFormDialog({
               ) : null}
 
               {activeStep === 1 ? (
-                <Stack spacing={2.5} sx={wizardStepMinHeightSx}>
+                <Stack spacing={2} sx={wizardStepMinHeightSx}>
                   <Divider />
                   <Typography variant="sectionEyebrow" sx={{ fontSize: 11 }}>
                     Pianificazione
@@ -646,17 +684,73 @@ export function TransportServiceFormDialog({
                         fullWidth
                         label="Stato iniziale"
                         value={formValues.serviceStatus}
-                        onChange={(event) =>
-                          setFormValues((current) => ({
-                            ...current,
-                            serviceStatus: event.target
-                              .value as TransportServiceStatus,
-                          }))
-                        }
+                        onChange={(event) => {
+                          const nextStatus = event.target
+                            .value as TransportServiceStatus;
+
+                          setFormValues((current) => {
+                            if (shouldClearAssignedVolunteers(nextStatus)) {
+                              return {
+                                ...current,
+                                serviceStatus: nextStatus,
+                                volunteerIds: [],
+                                volunteerLabels: [],
+                                volunteerRoles: [],
+                              };
+                            }
+
+                            return {
+                              ...current,
+                              serviceStatus: nextStatus,
+                            };
+                          });
+                        }}
                         disabled={isSubmitting}
                       >
-                        <MenuItem value="pending">In attesa</MenuItem>
-                        <MenuItem value="accepted">Accettato</MenuItem>
+                        {editableServiceStatuses.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {getTransportStatusLabel(status)}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    ) : canEditStatus ? (
+                      <TextField
+                        select
+                        fullWidth
+                        label="Stato servizio"
+                        value={formValues.serviceStatus}
+                        onChange={(event) => {
+                          const nextStatus = event.target
+                            .value as TransportServiceStatus;
+
+                          setFormValues((current) => {
+                            if (!canEditStatus) {
+                              return current;
+                            }
+
+                            if (shouldClearAssignedVolunteers(nextStatus)) {
+                              return {
+                                ...current,
+                                serviceStatus: nextStatus,
+                                volunteerIds: [],
+                                volunteerLabels: [],
+                                volunteerRoles: [],
+                              };
+                            }
+
+                            return {
+                              ...current,
+                              serviceStatus: nextStatus,
+                            };
+                          });
+                        }}
+                        disabled={isSubmitting || !canEditStatus}
+                      >
+                        {editableServiceStatuses.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {getTransportStatusLabel(status)}
+                          </MenuItem>
+                        ))}
                       </TextField>
                     ) : (
                       <Stack
@@ -735,14 +829,14 @@ export function TransportServiceFormDialog({
                       }))
                     }
                     multiline
-                    minRows={4}
+                    minRows={3}
                     disabled={isSubmitting}
                   />
                 </Stack>
               ) : null}
 
               {activeStep === 2 ? (
-                <Stack spacing={2.5} sx={wizardStepMinHeightSx}>
+                <Stack spacing={2} sx={wizardStepMinHeightSx}>
                   <Divider />
                   <Typography variant="sectionEyebrow" sx={{ fontSize: 11 }}>
                     Risorse
@@ -819,6 +913,10 @@ export function TransportServiceFormDialog({
 
                           return index === 0 ? "driver" : "attendant";
                         }),
+                        serviceStatus:
+                          ids.length > 0
+                            ? "assigned"
+                            : normalizeStatusFromResources(current),
                       }));
                     }}
                   />

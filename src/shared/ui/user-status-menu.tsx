@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AccountCircle, Apartment, Logout } from "@mui/icons-material";
+import { AccountCircle, Logout } from "@mui/icons-material";
 import {
   Avatar,
   Box,
@@ -19,10 +19,7 @@ type UserStatusMenuProps = Readonly<{
   email: string | null | undefined;
   sessionExpiry: string;
   activeRole: string;
-  isSuperUser: boolean;
-  hasActiveOrganizationContext: boolean;
   onChangePassword: () => void;
-  onEnterOrganization: () => void;
   onLogout: () => Promise<void>;
 }>;
 
@@ -32,10 +29,7 @@ export function UserStatusMenu({
   email,
   sessionExpiry,
   activeRole,
-  isSuperUser,
-  hasActiveOrganizationContext,
   onChangePassword,
-  onEnterOrganization,
   onLogout,
 }: UserStatusMenuProps) {
   const theme = useTheme();
@@ -203,18 +197,6 @@ export function UserStatusMenu({
           >
             <AccountCircle sx={{ mr: 1 }} /> Cambia password
           </MenuItem>
-
-          {isSuperUser && !hasActiveOrganizationContext ? (
-            <MenuItem
-              onClick={() => {
-                handleUserMenuClose();
-                onEnterOrganization();
-              }}
-              sx={profileMenuItemSx}
-            >
-              <Apartment sx={{ mr: 1 }} /> Entra in organizzazione
-            </MenuItem>
-          ) : null}
 
           <MenuItem
             onClick={async () => {

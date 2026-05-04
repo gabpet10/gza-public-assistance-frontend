@@ -9,6 +9,7 @@ import {
   ExpandLess,
   ExpandMore,
   EventRepeat,
+  FileDownload,
   GroupAdd,
   LocalShipping,
   ViewList,
@@ -66,7 +67,11 @@ import type {
 import { EntityLookupDialogField } from "@/shared/ui/entity-lookup-dialog-field";
 import { TransportServiceFormDialog } from "@/features/transport-services/components/transport-service-form-dialog";
 import { TransportServicesCalendar } from "@/features/transport-services/components/transport-services-calendar";
-import { TransportServicesGrid } from "@/features/transport-services/components/transport-services-grid";
+import {
+  TransportServicesGrid,
+  transportServicesExportColumns,
+} from "@/features/transport-services/components/transport-services-grid";
+import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import {
   useConfirmActionState,
@@ -93,7 +98,7 @@ import {
   toCalendarFetchWindow,
   toServiceFallbackFromCalendarEvent,
   toUtcIsoOrUndefined,
-} from "./transport-services-workspace.helpers";
+} from "./transport-services-workspace-helpers";
 import { useTransportServiceMutations } from "./use-transport-service-mutations";
 import { TransportServiceDetailPanel } from "./transport-service-detail-panel";
 
@@ -121,6 +126,7 @@ const statusFilterOptions: Array<{
 ];
 
 export function TransportServicesWorkspace() {
+  const { exportRowsToExcel } = useExcelExport();
   const { session } = useAuth();
   const effectiveRole = getEffectiveRoleFromSession(session);
   const isVolunteer = effectiveRole === "VOLUNTEER";
@@ -179,10 +185,6 @@ export function TransportServicesWorkspace() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [assignVehicleId, setAssignVehicleId] = useState("");
-  const [assignVehicleLabel, setAssignVehicleLabel] = useState("");
-  const [assignVehicleSecondaryLabel, setAssignVehicleSecondaryLabel] =
-    useState("");
   const [assignTeamMembers, setAssignTeamMembers] = useState<
     AssignDialogMember[]
   >([]);
@@ -200,6 +202,7 @@ export function TransportServicesWorkspace() {
   >(null);
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   const [rescheduleAt, setRescheduleAt] = useState("");
+  const [rescheduleEndAt, setRescheduleEndAt] = useState("");
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [calendarCreateSeed, setCalendarCreateSeed] = useState<string | null>(
@@ -340,34 +343,13 @@ export function TransportServicesWorkspace() {
     }
 
     const serviceVolunteers = selectedTransportService.volunteers;
-    const hasServiceVolunteers = serviceVolunteers.length > 0;
-
-    const volunteerIds = hasServiceVolunteers
-      ? serviceVolunteers.map((volunteer) => volunteer.volunteerId)
-      : selectedTransportService.assignedVolunteerIds.length > 0
-        ? selectedTransportService.assignedVolunteerIds
-        : [];
-    const volunteerLabels = hasServiceVolunteers
-      ? serviceVolunteers.map((volunteer) =>
-          normalizeLookupLabel(volunteer.fullName, volunteer.volunteerId),
-        )
-      : volunteerIds.map((volunteerId) => {
-          const alignedIndex =
-            selectedTransportService.assignedVolunteerIds.findIndex(
-              (candidateId) => candidateId === volunteerId,
-            );
-          const alignedName =
-            alignedIndex >= 0
-              ? (selectedTransportService.assignedVolunteerNames[
-                  alignedIndex
-                ]?.trim() ?? "")
-              : "";
-
-          return normalizeLookupLabel(alignedName, volunteerId);
-        });
-    const volunteerRoles = hasServiceVolunteers
-      ? serviceVolunteers.map((volunteer) => volunteer.role)
-      : volunteerIds.map((_, index) => (index === 0 ? "driver" : "attendant"));
+    const volunteerIds = serviceVolunteers.map(
+      (volunteer) => volunteer.volunteerId,
+    );
+    const volunteerLabels = serviceVolunteers.map((volunteer) =>
+      normalizeLookupLabel(volunteer.fullName, volunteer.volunteerId),
+    );
+    const volunteerRoles = serviceVolunteers.map((volunteer) => volunteer.role);
 
     return {
       clientId: selectedTransportService.clientId,
@@ -549,36 +531,13 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    setAssignVehicleId(selectedTransportService.vehicleId ?? "");
-    setAssignVehicleLabel(selectedTransportService.vehicleDisplayName ?? "");
-    setAssignVehicleSecondaryLabel(
-      selectedTransportService.vehicleDescription ?? "",
+    setAssignTeamMembers(
+      selectedTransportService.volunteers.map((volunteer) => ({
+        volunteerId: volunteer.volunteerId,
+        label: volunteer.fullName.trim(),
+        role: volunteer.role,
+      })),
     );
-    if (selectedTransportService.volunteers.length > 0) {
-      setAssignTeamMembers(
-        selectedTransportService.volunteers.map((volunteer) => ({
-          volunteerId: volunteer.volunteerId,
-          label: volunteer.fullName.trim(),
-          role: volunteer.role,
-        })),
-      );
-    } else {
-      setAssignTeamMembers(
-        selectedTransportService.assignedVolunteerIds.map(
-          (volunteerId, index) => {
-            const alignedName =
-              selectedTransportService.assignedVolunteerNames[index]?.trim() ??
-              "";
-
-            return {
-              volunteerId,
-              label: alignedName,
-              role: index === 0 ? "driver" : "attendant",
-            };
-          },
-        ),
-      );
-    }
     setAssignNote(selectedTransportService.note ?? "");
     setAssignError(null);
     setIsAssignDialogOpen(true);
@@ -586,11 +545,6 @@ export function TransportServicesWorkspace() {
 
   const handleAssignResources = async () => {
     if (!selectedTransportService || !session?.userId) {
-      return;
-    }
-
-    if (!assignVehicleId.trim()) {
-      setAssignError("Seleziona un veicolo.");
       return;
     }
 
@@ -603,7 +557,7 @@ export function TransportServicesWorkspace() {
 
     const didAssign = await assignResources(
       selectedTransportService.id,
-      assignVehicleId,
+      selectedTransportService.vehicleId ?? "",
       assignTeamMembers.map((member) => ({
         volunteerId: member.volunteerId,
         role: member.role,
@@ -700,6 +654,7 @@ export function TransportServicesWorkspace() {
     }
 
     setRescheduleAt(selectedTransportService.scheduledAt);
+    setRescheduleEndAt(selectedTransportService.scheduledEnd ?? "");
     setRescheduleError(null);
     setIsRescheduleDialogOpen(true);
   };
@@ -714,6 +669,23 @@ export function TransportServicesWorkspace() {
       return;
     }
 
+    if (rescheduleEndAt) {
+      const parsedStart = new Date(rescheduleAt).getTime();
+      const parsedEnd = new Date(rescheduleEndAt).getTime();
+
+      if (Number.isNaN(parsedStart) || Number.isNaN(parsedEnd)) {
+        setRescheduleError("Inserisci data e ora valide.");
+        return;
+      }
+
+      if (parsedEnd <= parsedStart) {
+        setRescheduleError(
+          "La data/ora di fine deve essere successiva alla data/ora di inizio.",
+        );
+        return;
+      }
+    }
+
     setRescheduleError(null);
 
     const expectedVersion =
@@ -726,6 +698,7 @@ export function TransportServicesWorkspace() {
       selectedTransportService.scheduledAt,
       selectedTransportService.scheduledEnd,
       rescheduleAt,
+      rescheduleEndAt || null,
       expectedVersion,
     );
 
@@ -1010,30 +983,99 @@ export function TransportServicesWorkspace() {
     };
   };
 
-  const canAccept =
-    canUseLifecycleActions && selectedTransportService?.status === "pending";
-  const canStart =
-    canUseLifecycleActions && selectedTransportService?.status === "assigned";
-  const canComplete =
-    canUseLifecycleActions &&
-    selectedTransportService?.status === "in_progress";
   const canCancel =
     canUseLifecycleActions &&
     selectedTransportService?.status !== "completed" &&
     selectedTransportService?.status !== "cancelled";
   const canAssign =
-    selectedTransportService?.status !== "completed" &&
-    selectedTransportService?.status !== "cancelled";
+    !isVolunteer &&
+    (selectedTransportService?.status === "accepted" ||
+      selectedTransportService?.status === "assigned");
   const canReschedule = canCancel;
-  const canEdit = Boolean(canManageServiceCrud);
+  const canEdit = Boolean(
+    canManageServiceCrud &&
+    selectedTransportService?.status !== "in_progress" &&
+    selectedTransportService?.status !== "completed" &&
+    selectedTransportService?.status !== "cancelled",
+  );
   const canDelete = Boolean(canManageServiceCrud);
 
-  const handleOpenAssignmentAction = () => {
-    if (isVolunteer) {
-      handleOpenVolunteerVehicleDialog();
+  const isCurrentVolunteerAssigned = Boolean(
+    isVolunteer &&
+    selectedTransportService &&
+    session?.userId &&
+    selectedTransportService.volunteers.some(
+      (volunteer) => volunteer.userId === session.userId,
+    ),
+  );
+
+  const canVolunteerAccept = Boolean(
+    isVolunteer &&
+    selectedTransportService &&
+    !isCurrentVolunteerAssigned &&
+    (selectedTransportService.status === "accepted" ||
+      selectedTransportService.status === "assigned"),
+  );
+
+  const canVolunteerRemove = Boolean(
+    isVolunteer &&
+    selectedTransportService &&
+    isCurrentVolunteerAssigned &&
+    selectedTransportService.status === "assigned",
+  );
+
+  const canChangeVehicle = Boolean(isVolunteer || canManageServiceCrud);
+
+  const nextLifecycleStatusLabel = (() => {
+    if (!selectedTransportService || isVolunteer) {
+      return null;
+    }
+
+    if (selectedTransportService.status === "pending") {
+      return "Accettato";
+    }
+
+    if (selectedTransportService.status === "accepted") {
+      return "Assegnato";
+    }
+
+    if (selectedTransportService.status === "assigned") {
+      return "In corso";
+    }
+
+    if (selectedTransportService.status === "in_progress") {
+      return "Completato";
+    }
+
+    return null;
+  })();
+
+  const handleAdvanceStatus = () => {
+    if (!selectedTransportService || isVolunteer) {
       return;
     }
 
+    if (selectedTransportService.status === "pending") {
+      void handleAcceptService();
+      return;
+    }
+
+    if (selectedTransportService.status === "accepted") {
+      handleOpenAssignDialog();
+      return;
+    }
+
+    if (selectedTransportService.status === "assigned") {
+      void handleStartService();
+      return;
+    }
+
+    if (selectedTransportService.status === "in_progress") {
+      void handleCompleteService();
+    }
+  };
+
+  const handleOpenAssignmentAction = () => {
     handleOpenAssignDialog();
   };
 
@@ -1047,14 +1089,21 @@ export function TransportServicesWorkspace() {
   }
 
   return (
-    <Stack spacing={4}>
-      <ContentCard className="backdrop-blur-none p-0">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <Stack spacing={2} sx={{ mt: { xs: -0.5, md: -1 } }}>
+      <ContentCard className="backdrop-blur-none p-2 md:p-2.5">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <Box sx={workspaceHeaderIconSx}>
-              <LocalShipping sx={{ fontSize: 24 }} />
+            <Box
+              sx={{
+                ...workspaceHeaderIconSx,
+                width: { xs: 34, md: 36 },
+                height: { xs: 34, md: 36 },
+                borderRadius: 1.5,
+              }}
+            >
+              <LocalShipping sx={{ fontSize: 18 }} />
             </Box>
-            <Typography variant="sectionEyebrow" sx={{ fontSize: 16 }}>
+            <Typography variant="sectionEyebrow" sx={{ fontSize: 13 }}>
               Trasporto socio-sanitario
             </Typography>
           </div>
@@ -1064,8 +1113,13 @@ export function TransportServicesWorkspace() {
               <>
                 <Button
                   variant="contained"
+                  size="small"
                   startIcon={<Add />}
-                  sx={workspacePrimaryActionButtonSx}
+                  sx={{
+                    ...workspacePrimaryActionButtonSx,
+                    minHeight: 34,
+                    px: 1.35,
+                  }}
                   disabled={!canManageServiceCrud}
                   onClick={() => {
                     if (!canManageServiceCrud) {
@@ -1080,8 +1134,13 @@ export function TransportServicesWorkspace() {
                 </Button>
                 <Button
                   variant="contained"
+                  size="small"
                   startIcon={<Edit />}
-                  sx={workspacePrimaryActionButtonSx}
+                  sx={{
+                    ...workspacePrimaryActionButtonSx,
+                    minHeight: 34,
+                    px: 1.35,
+                  }}
                   disabled={!selectedTransportService || !canEdit}
                   onClick={() => {
                     if (!canEdit) {
@@ -1095,8 +1154,10 @@ export function TransportServicesWorkspace() {
                 </Button>
                 <Button
                   variant="contained"
+                  size="small"
                   color="error"
                   startIcon={<DeleteOutline />}
+                  sx={{ minHeight: 34, px: 1.35 }}
                   disabled={!selectedTransportService || !canDelete}
                   onClick={() => {
                     if (!canDelete) {
@@ -1107,6 +1168,21 @@ export function TransportServicesWorkspace() {
                   }}
                 >
                   Elimina
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<FileDownload />}
+                  sx={{ minHeight: 34, px: 1.35 }}
+                  onClick={() =>
+                    exportRowsToExcel(
+                      rows,
+                      transportServicesExportColumns,
+                      "servizi-trasporto",
+                    )
+                  }
+                >
+                  Export Excel
                 </Button>
               </>
             ) : null}
@@ -1121,150 +1197,158 @@ export function TransportServicesWorkspace() {
                 }
                 setActiveView(value);
               }}
-              sx={workspaceViewToggleGroupSx}
+              sx={{
+                ...workspaceViewToggleGroupSx,
+                "& .MuiToggleButton-root": {
+                  ...((workspaceViewToggleGroupSx as Record<string, unknown>)[
+                    "& .MuiToggleButton-root"
+                  ] as object),
+                  minHeight: 34,
+                  px: 1.2,
+                  fontSize: "0.82rem",
+                },
+              }}
             >
               <ToggleButton value="grid">
-                <ViewList sx={{ fontSize: 18, mr: 0.75 }} /> Lista
+                <ViewList sx={{ fontSize: 16, mr: 0.6 }} /> Lista
               </ToggleButton>
               <ToggleButton value="calendar">
-                <CalendarMonth sx={{ fontSize: 18, mr: 0.75 }} /> Calendario
+                <CalendarMonth sx={{ fontSize: 16, mr: 0.6 }} /> Calendario
               </ToggleButton>
             </ToggleButtonGroup>
           </div>
         </div>
       </ContentCard>
 
-      <ContentCard className="backdrop-blur-none">
-        <Stack spacing={3}>
+      <ContentCard className="backdrop-blur-none p-2 md:p-2.5">
+        <Stack spacing={2}>
           {activeView === "grid" ? (
-            <ContentCard>
-              <Stack spacing={2.25}>
-                <Typography variant="sectionEyebrow">
-                  Ricerca servizi
-                </Typography>
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={1.25}
-                  alignItems={{ xs: "stretch", md: "center" }}
+            <Stack spacing={1.25}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1}
+                alignItems={{ xs: "stretch", md: "center" }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Cerca"
+                  placeholder="Cerca per cliente, stato o destinazione"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                />
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Stato servizio"
+                  value={statusFilter}
+                  onChange={(event) =>
+                    handleStatusFilterChange(
+                      event.target.value as TransportStatusFilter,
+                    )
+                  }
                 >
-                  <TextField
-                    fullWidth
-                    label="Cerca"
-                    placeholder="Cerca per cliente, stato o destinazione"
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                  />
-                  <TextField
-                    select
-                    fullWidth
-                    label="Stato servizio"
-                    value={statusFilter}
-                    onChange={(event) =>
-                      handleStatusFilterChange(
-                        event.target.value as TransportStatusFilter,
-                      )
-                    }
-                  >
-                    {statusFilterOptions.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <Tooltip
-                    title={
+                  {statusFilterOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Tooltip
+                  title={
+                    isGridAdvancedFiltersOpen
+                      ? "Nascondi filtri avanzati"
+                      : "Mostra filtri avanzati"
+                  }
+                >
+                  <IconButton
+                    type="button"
+                    aria-label={
                       isGridAdvancedFiltersOpen
                         ? "Nascondi filtri avanzati"
                         : "Mostra filtri avanzati"
                     }
+                    onClick={() =>
+                      setIsGridAdvancedFiltersOpen((current) => !current)
+                    }
+                    size="small"
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      alignSelf: "center",
+                      borderRadius: 1.5,
+                      border: "1px solid rgba(15, 109, 122, 0.35)",
+                      color: "var(--accent-secondary)",
+                      backgroundColor: isGridAdvancedFiltersOpen
+                        ? "rgba(15, 109, 122, 0.16)"
+                        : "#ffffff",
+                      "&:hover": {
+                        backgroundColor: "rgba(15, 109, 122, 0.12)",
+                      },
+                    }}
                   >
-                    <IconButton
-                      type="button"
-                      aria-label={
-                        isGridAdvancedFiltersOpen
-                          ? "Nascondi filtri avanzati"
-                          : "Mostra filtri avanzati"
-                      }
-                      onClick={() =>
-                        setIsGridAdvancedFiltersOpen((current) => !current)
-                      }
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        alignSelf: "center",
-                        borderRadius: 2,
-                        border: "1px solid rgba(15, 109, 122, 0.35)",
-                        color: "var(--accent-secondary)",
-                        backgroundColor: isGridAdvancedFiltersOpen
-                          ? "rgba(15, 109, 122, 0.16)"
-                          : "#ffffff",
-                        "&:hover": {
-                          backgroundColor: "rgba(15, 109, 122, 0.12)",
-                        },
-                      }}
-                    >
-                      {isGridAdvancedFiltersOpen ? (
-                        <ExpandLess />
-                      ) : (
-                        <ExpandMore />
-                      )}
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-
-                <Collapse in={isGridAdvancedFiltersOpen}>
-                  <Stack
-                    spacing={1.25}
-                    sx={{ pt: 0.5 }}
-                    direction={{ xs: "column", md: "row" }}
-                  >
-                    <Box sx={{ width: "100%" }}>
-                      <EntityLookupDialogField
-                        label="Filtra per volontari"
-                        dialogTitle="Seleziona volontari"
-                        value={volunteerFilterIds}
-                        selectedOptions={volunteerFilterIds.map(
-                          (id, index) => ({
-                            id,
-                            label: volunteerFilterLabels[index],
-                          }),
-                        )}
-                        multiple
-                        triggerAriaLabel="Apri filtro volontari"
-                        disabled={!scopedOrganizationId}
-                        onSearch={(input) =>
-                          scopedOrganizationId
-                            ? searchVolunteerLookup(input, scopedOrganizationId)
-                            : Promise.resolve({ items: [], hasNextPage: false })
-                        }
-                        onChange={handleVolunteerFilterChange}
-                      />
-                    </Box>
-
-                    <TextField
-                      fullWidth
-                      type="datetime-local"
-                      label="Periodo da"
-                      InputLabelProps={{ shrink: true }}
-                      value={gridRangeStartLocal}
-                      onChange={(event) =>
-                        handleGridRangeStartChange(event.target.value)
-                      }
-                    />
-                    <TextField
-                      fullWidth
-                      type="datetime-local"
-                      label="Periodo a"
-                      InputLabelProps={{ shrink: true }}
-                      value={gridRangeEndLocal}
-                      onChange={(event) =>
-                        handleGridRangeEndChange(event.target.value)
-                      }
-                    />
-                  </Stack>
-                </Collapse>
+                    {isGridAdvancedFiltersOpen ? (
+                      <ExpandLess />
+                    ) : (
+                      <ExpandMore />
+                    )}
+                  </IconButton>
+                </Tooltip>
               </Stack>
-            </ContentCard>
+
+              <Collapse in={isGridAdvancedFiltersOpen}>
+                <Stack
+                  spacing={1}
+                  sx={{ pt: 0.25 }}
+                  direction={{ xs: "column", md: "row" }}
+                >
+                  <Box sx={{ width: "100%" }}>
+                    <EntityLookupDialogField
+                      label="Filtra per volontari"
+                      dialogTitle="Seleziona volontari"
+                      value={volunteerFilterIds}
+                      selectedOptions={volunteerFilterIds.map((id, index) => ({
+                        id,
+                        label: volunteerFilterLabels[index],
+                      }))}
+                      multiple
+                      triggerAriaLabel="Apri filtro volontari"
+                      disabled={!scopedOrganizationId}
+                      onSearch={(input) =>
+                        scopedOrganizationId
+                          ? searchVolunteerLookup(input, scopedOrganizationId)
+                          : Promise.resolve({ items: [], hasNextPage: false })
+                      }
+                      onChange={handleVolunteerFilterChange}
+                    />
+                  </Box>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="datetime-local"
+                    label="Periodo da"
+                    InputLabelProps={{ shrink: true }}
+                    value={gridRangeStartLocal}
+                    onChange={(event) =>
+                      handleGridRangeStartChange(event.target.value)
+                    }
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="datetime-local"
+                    label="Periodo a"
+                    InputLabelProps={{ shrink: true }}
+                    value={gridRangeEndLocal}
+                    onChange={(event) =>
+                      handleGridRangeEndChange(event.target.value)
+                    }
+                  />
+                </Stack>
+              </Collapse>
+            </Stack>
           ) : null}
 
           {listError ? (
@@ -1319,16 +1403,7 @@ export function TransportServicesWorkspace() {
         isActionSubmitting={isActionSubmitting}
         errorMessage={detailError}
         actionErrorMessage={actionError}
-        onAccept={() => {
-          void handleAcceptService();
-        }}
         onAssign={handleOpenAssignmentAction}
-        onStart={() => {
-          void handleStartService();
-        }}
-        onComplete={() => {
-          void handleCompleteService();
-        }}
         onReschedule={handleOpenRescheduleDialog}
         onEdit={() => {
           if (!canEdit) {
@@ -1365,20 +1440,21 @@ export function TransportServicesWorkspace() {
         onRemoveVolunteer={(volunteerId) => {
           void handleOverrideRemoveVolunteer(volunteerId);
         }}
-        canAccept={Boolean(canAccept)}
         canAssign={Boolean(canAssign)}
-        canStart={Boolean(canStart)}
-        canComplete={Boolean(canComplete)}
         canReschedule={Boolean(canReschedule)}
         canCancel={Boolean(canCancel)}
         canEdit={canEdit}
         canDelete={canDelete}
-        canSelfAssign={isVolunteer}
-        canSelfRemove={isVolunteer}
-        canAssignVehicle={isVolunteer}
+        canSelfAssign={canVolunteerAccept}
+        canSelfRemove={canVolunteerRemove}
+        canAssignVehicle={canChangeVehicle}
         canRemoveVehicle={isVolunteer || canOverrideAssignments}
+        canAdvanceStatus={Boolean(nextLifecycleStatusLabel)}
+        nextStatusLabel={nextLifecycleStatusLabel}
+        isVolunteerView={isVolunteer}
         canOverrideRemoveVolunteer={canOverrideAssignments}
         canOverrideRemoveVehicle={canOverrideAssignments}
+        onAdvanceStatus={handleAdvanceStatus}
         onClose={() => {
           setOpenedServiceId(null);
           setDetailError(null);
@@ -1425,42 +1501,12 @@ export function TransportServicesWorkspace() {
         <DialogTitle sx={{ pb: 1.25 }}>
           <FeatureDialogTitle
             icon={<GroupAdd sx={{ fontSize: 20 }} />}
-            eyebrow="Assegna risorse"
+            eyebrow="Assegna volontari"
           />
         </DialogTitle>
         <DialogContent sx={formDialogContentSx}>
           <Stack spacing={2.5} sx={{ pt: 1.5 }}>
             {assignError ? <Alert severity="error">{assignError}</Alert> : null}
-
-            <EntityLookupDialogField
-              label="Veicolo"
-              dialogTitle="Seleziona veicolo"
-              value={assignVehicleId ? [assignVehicleId] : []}
-              selectedOptions={
-                assignVehicleId
-                  ? [
-                      {
-                        id: assignVehicleId,
-                        label: assignVehicleLabel || assignVehicleId,
-                        description: assignVehicleSecondaryLabel || undefined,
-                      },
-                    ]
-                  : []
-              }
-              required
-              disabled={isActionSubmitting || !scopedOrganizationId}
-              triggerAriaLabel="Apri ricerca veicolo"
-              onSearch={(input) =>
-                scopedOrganizationId
-                  ? searchVehicleLookup(input, scopedOrganizationId)
-                  : Promise.resolve({ items: [], hasNextPage: false })
-              }
-              onChange={(ids, options) => {
-                setAssignVehicleId(ids[0] ?? "");
-                setAssignVehicleLabel(options[0]?.label ?? "");
-                setAssignVehicleSecondaryLabel(options[0]?.description ?? "");
-              }}
-            />
 
             <EntityLookupDialogField
               label="Volontari"
@@ -1685,7 +1731,7 @@ export function TransportServicesWorkspace() {
               ) : null}
 
               <DateTimePicker
-                label="Nuova data e ora"
+                label="Nuova data e ora inizio"
                 value={rescheduleAt ? dayjs(rescheduleAt) : null}
                 onChange={(value) =>
                   setRescheduleAt(
@@ -1699,6 +1745,25 @@ export function TransportServicesWorkspace() {
                   textField: {
                     required: true,
                     disabled: isActionSubmitting,
+                  },
+                }}
+              />
+
+              <DateTimePicker
+                label="Nuova data e ora fine"
+                value={rescheduleEndAt ? dayjs(rescheduleEndAt) : null}
+                onChange={(value) =>
+                  setRescheduleEndAt(
+                    value && value.isValid()
+                      ? value.toDate().toISOString()
+                      : "",
+                  )
+                }
+                ampm={false}
+                slotProps={{
+                  textField: {
+                    disabled: isActionSubmitting,
+                    helperText: "Opzionale",
                   },
                 }}
               />

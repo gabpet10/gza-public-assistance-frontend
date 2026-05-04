@@ -55,11 +55,30 @@ function requireField<T>(value: T | null | undefined, fieldName: string): T {
   return value;
 }
 
+function requirePresent<T>(value: T | undefined, fieldName: string): T {
+  if (value === undefined) {
+    throw new Error(`Invalid transport-services payload: missing ${fieldName}`);
+  }
+
+  return value;
+}
+
 function toTransportAssignmentRole(
   value: string | undefined,
 ): TransportAssignmentRole {
   const normalized = value?.trim().toLowerCase();
-  return normalized === "driver" ? "driver" : "attendant";
+
+  if (normalized === "driver") {
+    return "driver";
+  }
+
+  if (normalized === "attendant") {
+    return "attendant";
+  }
+
+  throw new Error(
+    `Invalid transport-services payload: unsupported assignment role ${value ?? "(empty)"}`,
+  );
 }
 
 function toDisplayLabel(parts: Array<string | null | undefined>) {
@@ -71,31 +90,15 @@ function toDisplayLabel(parts: Array<string | null | undefined>) {
   return label.length > 0 ? label : null;
 }
 
-function toVolunteerNamesArray(
-  names: string[] | null | undefined,
-  fallbackCsv: string | null | undefined,
-) {
-  if (Array.isArray(names) && names.length > 0) {
-    return names.map((name) => name.trim()).filter(Boolean);
-  }
-
-  if (!fallbackCsv) {
-    return [];
-  }
-
-  return fallbackCsv
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean);
-}
-
 function toTransportServiceVolunteerModel(
   dto: TransportServiceVolunteerDto,
 ): TransportServiceVolunteer {
   const role = requireField(dto.role, "volunteer.role");
+  const userId = requirePresent(dto.userId, "volunteer.userId");
 
   return {
     volunteerId: requireField(dto.volunteerId, "volunteer.volunteerId"),
+    userId: userId ? userId.trim() : null,
     fullName: requireField(dto.fullName, "volunteer.fullName").trim(),
     phone: dto.phone?.trim() ?? null,
     role: toTransportAssignmentRole(role),
@@ -106,6 +109,10 @@ function normalizeTransportStatus(
   value: string | undefined,
 ): TransportServiceStatus {
   const normalized = value?.trim().toUpperCase() ?? "";
+
+  if (normalized === "PENDING") {
+    return "pending";
+  }
 
   if (normalized === "ACCEPTED") {
     return "accepted";
@@ -137,6 +144,10 @@ function normalizeTransportType(value: string | undefined): TransportType {
 
   if (normalized === "sanitario") {
     return "sanitario";
+  }
+
+  if (normalized === "sociale") {
+    return "sociale";
   }
 
   if (normalized === "dimissione_ospedaliera") {
@@ -211,35 +222,21 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
   );
   const isPaid = requireField(dto.isPaid, "transportService.isPaid");
   const createdAt = requireField(dto.createdAt, "transportService.createdAt");
-  const scheduledEnd = dto.scheduledEnd ?? null;
-  const mappedVolunteers = (dto.volunteers ?? []).map(
-    toTransportServiceVolunteerModel,
+  const scheduledEnd = requireField(
+    dto.scheduledEnd,
+    "transportService.scheduledEnd",
   );
-  const volunteerIds = [...(dto.assignedVolunteerIds ?? [])]
-    .map((id) => id.trim())
-    .filter(Boolean);
-  const uniqueVolunteerIds = Array.from(new Set(volunteerIds));
-  const volunteerNames = toVolunteerNamesArray(
-    dto.assignedVolunteerNames,
-    dto.volunteerNames,
+  const mappedVolunteers = requireField(
+    dto.volunteers,
+    "transportService.volunteers",
+  ).map(toTransportServiceVolunteerModel);
+  const volunteers = mappedVolunteers;
+  const assignedVolunteerIds = volunteers.map(
+    (volunteer) => volunteer.volunteerId,
   );
-  const fallbackVolunteers: TransportServiceVolunteer[] =
-    uniqueVolunteerIds.map((volunteerId, index) => ({
-      volunteerId,
-      fullName: volunteerNames[index] ?? "",
-      phone: null,
-      role: index === 0 ? "driver" : "attendant",
-    }));
-  const volunteers =
-    mappedVolunteers.length > 0 ? mappedVolunteers : fallbackVolunteers;
-  const assignedVolunteerIds =
-    uniqueVolunteerIds.length > 0
-      ? uniqueVolunteerIds
-      : volunteers.map((volunteer) => volunteer.volunteerId);
-  const assignedVolunteerNames =
-    volunteerNames.length > 0
-      ? volunteerNames
-      : volunteers.map((volunteer) => volunteer.fullName);
+  const assignedVolunteerNames = volunteers.map(
+    (volunteer) => volunteer.fullName,
+  );
 
   const clientDisplayName =
     dto.clientDisplayName ??
@@ -266,12 +263,6 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
     ]) ??
     dto.vehicleId ??
     null;
-
-  const fallbackTeamCount = Math.max(
-    volunteers.length,
-    uniqueVolunteerIds.length,
-    volunteerNames.length,
-  );
 
   return {
     id,
@@ -301,7 +292,7 @@ function toTransportServiceModel(dto: TransportServiceDto): TransportService {
     volunteers,
     assignedVolunteerIds,
     assignedVolunteerNames,
-    teamMemberCount: dto.teamMemberCount ?? fallbackTeamCount,
+    teamMemberCount: dto.teamMemberCount ?? volunteers.length,
     acceptedAt: dto.acceptedAt ?? null,
     assignedAt: dto.assignedAt ?? null,
     startedAt: dto.startedAt ?? null,
@@ -377,9 +368,10 @@ function toTransportCalendarEventModel(
       dto.vehiclePlateNumber,
       dto.vehicleType,
     ]);
-  const volunteers = (dto.volunteers ?? []).map(
-    toTransportServiceVolunteerModel,
-  );
+  const volunteers = requireField(
+    dto.volunteers,
+    "calendarEvent.volunteers",
+  ).map(toTransportServiceVolunteerModel);
 
   return {
     id,
@@ -458,7 +450,6 @@ function toAssignPayload(
 ): AssignTransportServiceRequestDto {
   return {
     vehicleId: toNullableTrimmed(input.vehicleId),
-    assignedByUserId: toNullableTrimmed(input.assignedByUserId),
     teamMembers: input.teamMembers.map((member) => ({
       volunteerId: toNullableTrimmed(member.volunteerId),
       role: toNullableTrimmed(member.role),

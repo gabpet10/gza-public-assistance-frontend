@@ -1,6 +1,8 @@
 "use client";
 
 import { createTheme } from "@mui/material/styles";
+import type {} from "@mui/x-date-pickers/themeAugmentation";
+import type {} from "@mui/x-data-grid/themeAugmentation";
 
 declare module "@mui/material/styles" {
   interface TypographyVariants {
@@ -67,17 +69,17 @@ export const appTheme = createTheme({
   typography: {
     fontFamily: "var(--font-sans), sans-serif",
     h1: {
-      fontSize: "3.25rem",
+      fontSize: "3rem",
       lineHeight: 1,
       fontWeight: 800,
     },
     h2: {
-      fontSize: "2rem",
+      fontSize: "1.85rem",
       lineHeight: 1.1,
       fontWeight: 800,
     },
     h3: {
-      fontSize: "1.5rem",
+      fontSize: "1.4rem",
       lineHeight: 1.2,
       fontWeight: 700,
     },
@@ -86,33 +88,33 @@ export const appTheme = createTheme({
       textTransform: "none",
     },
     displayLarge: {
-      fontSize: "clamp(2.8rem, 5vw, 5rem)",
+      fontSize: "clamp(2.5rem, 4.6vw, 4.4rem)",
       lineHeight: 0.96,
       fontWeight: 800,
       letterSpacing: "-0.05em",
     },
     sectionEyebrow: {
-      fontSize: "0.82rem",
+      fontSize: "0.78rem",
       textTransform: "uppercase",
       letterSpacing: "0.16em",
       fontWeight: 800,
       color: "#f28c28",
     },
     sectionTitle: {
-      fontSize: "1.5rem",
+      fontSize: "1.35rem",
       lineHeight: 1.2,
       fontWeight: 800,
     },
     bodyLarge: {
-      fontSize: "1.05rem",
+      fontSize: "0.98rem",
       lineHeight: 1.7,
     },
     bodyMedium: {
-      fontSize: "0.95rem",
+      fontSize: "0.9rem",
       lineHeight: 1.65,
     },
     bodySmall: {
-      fontSize: "0.82rem",
+      fontSize: "0.78rem",
       lineHeight: 1.5,
     },
   },
@@ -124,8 +126,69 @@ export const appTheme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 999,
-          paddingInline: 18,
-          minHeight: 44,
+          paddingInline: 16,
+          minHeight: 40,
+          fontSize: "0.9rem",
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+    MuiFormControl: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+    MuiAutocomplete: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+    MuiDatePicker: {
+      defaultProps: {
+        slotProps: {
+          textField: {
+            size: "small",
+          },
+        },
+      },
+    },
+    MuiDateTimePicker: {
+      defaultProps: {
+        slotProps: {
+          textField: {
+            size: "small",
+          },
+        },
+      },
+    },
+    MuiTimePicker: {
+      defaultProps: {
+        slotProps: {
+          textField: {
+            size: "small",
+          },
+        },
+      },
+    },
+    MuiPickersTextField: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+    MuiIconButton: {
+      defaultProps: {
+        size: "small",
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          minHeight: 36,
+          fontSize: "0.9rem",
         },
       },
     },
@@ -141,13 +204,28 @@ export const appTheme = createTheme({
         root: {
           backgroundColor: "rgba(255,255,255,0.88)",
         },
+        input: {
+          fontSize: "0.9rem",
+          paddingTop: 10,
+          paddingBottom: 10,
+        },
       },
     },
     MuiChip: {
+      defaultProps: {
+        size: "small",
+      },
       styleOverrides: {
         root: {
           fontWeight: 700,
+          fontSize: "0.78rem",
         },
+      },
+    },
+    MuiDataGrid: {
+      defaultProps: {
+        rowHeight: 38,
+        columnHeaderHeight: 46,
       },
     },
   },

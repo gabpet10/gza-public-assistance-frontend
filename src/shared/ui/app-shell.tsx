@@ -426,15 +426,10 @@ export function AppShell({
               email={session?.email}
               sessionExpiry={sessionExpiry}
               activeRole={activeRole}
-              isSuperUser={isSuperUser}
-              hasActiveOrganizationContext={hasActiveOrganizationContext}
               onChangePassword={() => {
                 router.replace(
                   `/change-password?mode=optional&returnTo=${encodeURIComponent(pathname)}`,
                 );
-              }}
-              onEnterOrganization={() => {
-                router.replace("/organizations");
               }}
               onLogout={async () => {
                 await logout();
@@ -546,8 +541,9 @@ export function AppShell({
           sx={{
             flexGrow: 1,
             minWidth: 0,
-            p: { xs: 2, md: 4 },
-            pl: { xs: 2, md: 3 },
+            pt: { xs: 1, md: 1.5 },
+            pb: { xs: 2, md: 2.5 },
+            px: { xs: 2, md: 3 },
             width: "100%",
             transition: "all 220ms ease",
           }}

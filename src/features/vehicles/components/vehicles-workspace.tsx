@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Add, DeleteOutline, DirectionsCar, Edit } from "@mui/icons-material";
+import {
+  Add,
+  DeleteOutline,
+  DirectionsCar,
+  Edit,
+  FileDownload,
+} from "@mui/icons-material";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import {
   DataGrid,
@@ -22,6 +28,7 @@ import {
   type VehicleFormData,
 } from "@/features/vehicles/api/types";
 import { VehicleFormDialog } from "@/features/vehicles/components/vehicle-form-dialog";
+import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
 import { ContentCard } from "@/shared/ui/content-card";
@@ -52,6 +59,7 @@ function toVehicleSortField(field: string | undefined) {
 }
 
 export function VehiclesWorkspace() {
+  const { exportRowsToExcel } = useExcelExport();
   const { session } = useAuth();
   const scopedOrganizationId =
     session?.activeOrganizationId ??
@@ -250,14 +258,14 @@ export function VehiclesWorkspace() {
   };
 
   return (
-    <Stack spacing={4}>
-      <ContentCard className="overflow-hidden p-0">
+    <Stack spacing={2.5}>
+      <ContentCard className="overflow-hidden p-2 md:p-2.5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Box sx={workspaceHeaderIconSx}>
-              <DirectionsCar sx={{ fontSize: 24 }} />
+              <DirectionsCar sx={{ fontSize: 18 }} />
             </Box>
-            <Typography variant="sectionEyebrow" sx={{ fontSize: 16 }}>
+            <Typography variant="sectionEyebrow" sx={{ fontSize: 13 }}>
               Veicoli
             </Typography>
           </div>
@@ -265,26 +273,38 @@ export function VehiclesWorkspace() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="contained"
+              size="small"
               startIcon={<Add />}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsCreateDialogOpen(true)}
             >
               Nuovo
             </Button>
             <Button
               variant="contained"
+              size="small"
               startIcon={<Edit />}
               disabled={!canEditOrDelete}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsEditDialogOpen(true)}
             >
               Modifica
             </Button>
             <Button
               variant="contained"
+              size="small"
               color="error"
               startIcon={<DeleteOutline />}
               disabled={!canEditOrDelete}
+              sx={{ minHeight: 34, px: 1.35 }}
               onClick={() => setIsDeleteDialogOpen(true)}
             >
               Elimina
@@ -293,12 +313,22 @@ export function VehiclesWorkspace() {
         </div>
       </ContentCard>
 
-      <ContentCard>
+      <ContentCard className="p-2 md:p-2.5">
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca veicolo per targa, tipo o descrizione"
             onSearchTextChange={setSearchText}
+            rightActions={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileDownload />}
+                onClick={() => exportRowsToExcel(data, gridColumns, "veicoli")}
+              >
+                Export Excel
+              </Button>
+            }
           />
 
           {listError ? (

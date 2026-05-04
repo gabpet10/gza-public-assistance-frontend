@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Add, Business, DeleteOutline, Edit } from "@mui/icons-material";
+import {
+  Add,
+  Business,
+  DeleteOutline,
+  Edit,
+  FileDownload,
+} from "@mui/icons-material";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import {
   DataGrid,
@@ -18,6 +24,7 @@ import {
 } from "@/features/clients/api/clients-api";
 import type { Client, ClientFormData } from "@/features/clients/api/types";
 import { ClientFormDialog } from "@/features/clients/components/client-form-dialog";
+import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
 import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
 import { ContentCard } from "@/shared/ui/content-card";
@@ -51,6 +58,7 @@ function toClientSortField(field: string | undefined) {
 }
 
 export function ClientsWorkspace() {
+  const { exportRowsToExcel } = useExcelExport();
   const { session } = useAuth();
   const scopedOrganizationId =
     session?.activeOrganizationId ??
@@ -273,14 +281,14 @@ export function ClientsWorkspace() {
   };
 
   return (
-    <Stack spacing={4}>
-      <ContentCard className="overflow-hidden p-0">
+    <Stack spacing={2.5}>
+      <ContentCard className="overflow-hidden p-2 md:p-2.5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Box sx={workspaceHeaderIconSx}>
-              <Business sx={{ fontSize: 24 }} />
+              <Business sx={{ fontSize: 18 }} />
             </Box>
-            <Typography variant="sectionEyebrow" sx={{ fontSize: 16 }}>
+            <Typography variant="sectionEyebrow" sx={{ fontSize: 13 }}>
               Clienti
             </Typography>
           </div>
@@ -288,26 +296,38 @@ export function ClientsWorkspace() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="contained"
+              size="small"
               startIcon={<Add />}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsCreateDialogOpen(true)}
             >
               Nuovo
             </Button>
             <Button
               variant="contained"
+              size="small"
               startIcon={<Edit />}
               disabled={!canEditOrDelete}
-              sx={workspacePrimaryActionButtonSx}
+              sx={{
+                ...workspacePrimaryActionButtonSx,
+                minHeight: 34,
+                px: 1.35,
+              }}
               onClick={() => setIsEditDialogOpen(true)}
             >
               Modifica
             </Button>
             <Button
               variant="contained"
+              size="small"
               color="error"
               startIcon={<DeleteOutline />}
               disabled={!canEditOrDelete}
+              sx={{ minHeight: 34, px: 1.35 }}
               onClick={() => setIsDeleteDialogOpen(true)}
             >
               Elimina
@@ -316,12 +336,22 @@ export function ClientsWorkspace() {
         </div>
       </ContentCard>
 
-      <ContentCard>
+      <ContentCard className="p-2 md:p-2.5">
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
             searchPlaceholder="Cerca cliente per nome, telefono, citta o provincia"
             onSearchTextChange={setSearchText}
+            rightActions={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FileDownload />}
+                onClick={() => exportRowsToExcel(data, gridColumns, "clienti")}
+              >
+                Export Excel
+              </Button>
+            }
           />
 
           {listError ? (

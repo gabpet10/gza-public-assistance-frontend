@@ -18,17 +18,21 @@ export const workspaceDataGridSx: SxProps<Theme> = {
     background:
       "linear-gradient(180deg, rgba(11,58,83,0.18) 0%, rgba(11,58,83,0.12) 100%)",
     borderBottom: "2px solid rgba(11, 58, 83, 0.28)",
-    minHeight: 56,
+    minHeight: 46,
   },
   "& .MuiDataGrid-columnHeader": {
+    minHeight: 46,
+    maxHeight: 46,
     borderRight: "1px solid rgba(20, 32, 43, 0.08)",
-    px: 1.25,
+    px: 1,
+    display: "flex",
+    alignItems: "center",
   },
   "& .MuiDataGrid-columnHeaderTitle": {
     fontWeight: 800,
     color: "#14202b",
     letterSpacing: "0.03em",
-    fontSize: "0.82rem",
+    fontSize: "0.78rem",
     textTransform: "uppercase",
   },
   "& .workspace-row-even": {
@@ -37,11 +41,20 @@ export const workspaceDataGridSx: SxProps<Theme> = {
   "& .workspace-row-odd": {
     backgroundColor: "rgba(11, 58, 83, 0.05)",
   },
+  "& .MuiDataGrid-row": {
+    minHeight: "38px !important",
+    maxHeight: "38px !important",
+  },
   "& .MuiDataGrid-cell": {
     borderBottom: "1px solid rgba(20, 32, 43, 0.08)",
-    py: 1.1,
-    px: 1.25,
-    lineHeight: 1.45,
+    py: 0,
+    px: 1,
+    lineHeight: 1.35,
+    fontSize: "0.82rem",
+    display: "flex",
+    alignItems: "center",
+    minHeight: "38px !important",
+    maxHeight: "38px !important",
   },
   "& .MuiDataGrid-row:hover": {
     backgroundColor: "rgba(30, 143, 166, 0.14)",
@@ -59,7 +72,7 @@ export const workspaceDataGridSx: SxProps<Theme> = {
     backgroundColor: "rgba(30, 143, 166, 0.28)",
   },
   "& .MuiDataGrid-footerContainer": {
-    minHeight: 60,
+    minHeight: 50,
     background:
       "linear-gradient(180deg, rgba(11, 58, 83, 0.16) 0%, rgba(11, 58, 83, 0.22) 100%)",
     borderTop: "2px solid rgba(11, 58, 83, 0.34)",
@@ -88,18 +101,22 @@ export const organizationsEnterpriseDataGridSx: SxProps<Theme> = [
       background:
         "linear-gradient(180deg, rgba(247,251,253,0.98) 0%, rgba(234,243,247,0.98) 100%)",
       borderBottom: "1px solid rgba(20, 32, 43, 0.2)",
-      minHeight: 54,
+      minHeight: 46,
       borderTopLeftRadius: 8,
       borderTopRightRadius: 8,
     },
     "& .MuiDataGrid-columnHeader": {
+      minHeight: 46,
+      maxHeight: 46,
       borderRight: "1px solid rgba(20, 32, 43, 0.12)",
-      px: 1.5,
+      px: 1.25,
+      display: "flex",
+      alignItems: "center",
     },
     "& .MuiDataGrid-columnHeaderTitle": {
       textTransform: "none",
       letterSpacing: "0.01em",
-      fontSize: "0.87rem",
+      fontSize: "0.82rem",
       fontWeight: 700,
       color: "#173043",
     },
@@ -109,12 +126,21 @@ export const organizationsEnterpriseDataGridSx: SxProps<Theme> = [
     "& .workspace-row-odd": {
       backgroundColor: "#f6fafc",
     },
+    "& .MuiDataGrid-row": {
+      minHeight: "38px !important",
+      maxHeight: "38px !important",
+    },
     "& .MuiDataGrid-cell": {
       borderBottom: "1px solid rgba(20, 32, 43, 0.1)",
       borderRight: "1px solid rgba(20, 32, 43, 0.07)",
-      py: 1.15,
-      px: 1.5,
-      lineHeight: 1.45,
+      py: 0,
+      px: 1.25,
+      lineHeight: 1.35,
+      fontSize: "0.82rem",
+      display: "flex",
+      alignItems: "center",
+      minHeight: "38px !important",
+      maxHeight: "38px !important",
     },
     "& .MuiDataGrid-row:hover": {
       backgroundColor: "rgba(30, 143, 166, 0.1)",
@@ -132,7 +158,7 @@ export const organizationsEnterpriseDataGridSx: SxProps<Theme> = [
       backgroundColor: "rgba(30, 143, 166, 0.22)",
     },
     "& .MuiDataGrid-footerContainer": {
-      minHeight: 56,
+      minHeight: 48,
       background: "#edf4f8",
       borderTop: "1px solid rgba(20, 32, 43, 0.16)",
     },

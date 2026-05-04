@@ -25,6 +25,7 @@ export type TransportTeamMember = {
 
 export type TransportServiceVolunteer = {
   volunteerId: string;
+  userId: string | null;
   fullName: string;
   phone: string | null;
   role: TransportAssignmentRole;
@@ -71,6 +72,7 @@ export type TransportService = {
 
 export type TransportServiceVolunteerDto = {
   volunteerId?: string;
+  userId?: string | null;
   fullName?: string;
   phone?: string | null;
   role?: string;

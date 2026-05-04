@@ -54,11 +54,6 @@ function getDriverDisplayName(row: TransportService): string | null {
     return row.volunteers[0].fullName;
   }
 
-  if (row.assignedVolunteerNames.length > 0) {
-    const firstName = row.assignedVolunteerNames[0]?.trim();
-    return firstName || null;
-  }
-
   return null;
 }
 
@@ -108,6 +103,76 @@ function getTransportTypeIcon(
 
   return <Diversity3 sx={iconSx} />;
 }
+
+export const transportServicesExportColumns: GridColDef<TransportService>[] = [
+  {
+    field: "clientDisplayName",
+    headerName: "Cliente",
+    valueGetter: (_, row) => row.clientDisplayName || row.clientId || "-",
+  },
+  {
+    field: "pickupDestinationDisplayName",
+    headerName: "Indirizzo",
+    valueGetter: (_, row) =>
+      [row.dropoffAddress, row.dropoffCity, row.dropoffProvince]
+        .filter(Boolean)
+        .join(", ") || "-",
+  },
+  {
+    field: "status",
+    headerName: "Stato",
+    valueGetter: (_, row) => getTransportStatusLabel(row.status),
+  },
+  {
+    field: "transportType",
+    headerName: "Tipologia",
+    valueGetter: (_, row) => getTransportTypeLabel(row.transportType),
+  },
+  {
+    field: "scheduledAt",
+    headerName: "Pianificato",
+  },
+  {
+    field: "dropoffCity",
+    headerName: "Destinazione",
+    valueGetter: (_, row) =>
+      row.pickupDestinationDisplayName || row.pickupDestinationId || "-",
+  },
+  {
+    field: "vehicleDisplayName",
+    headerName: "Veicolo",
+    valueGetter: (_, row) => row.vehicleDisplayName || row.vehicleId || "-",
+  },
+  {
+    field: "isPaid",
+    headerName: "Pagamento",
+    valueGetter: (_, row) => {
+      if (!row.isPaid) {
+        return "Non a pagamento";
+      }
+
+      return `A pagamento · ${formatAmount(row.amount)}`;
+    },
+  },
+  {
+    field: "teamMemberCount",
+    headerName: "Volontari",
+    valueGetter: (_, row) => {
+      const volunteersCount = Math.max(
+        row.volunteers.length,
+        row.teamMemberCount,
+      );
+      const countLabel = String(volunteersCount);
+      const driverDisplay = getDriverDisplayName(row);
+
+      if (!driverDisplay) {
+        return countLabel;
+      }
+
+      return `${countLabel} · Autista: ${driverDisplay}`;
+    },
+  },
+];
 
 export function TransportServicesGrid({
   rows,
@@ -233,8 +298,6 @@ export function TransportServicesGrid({
         const volunteersCount = Math.max(
           row.volunteers.length,
           row.teamMemberCount,
-          row.assignedVolunteerNames.length,
-          row.assignedVolunteerIds.length,
         );
         const countLabel = String(volunteersCount);
         const driverDisplay = getDriverDisplayName(row);

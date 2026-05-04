@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Button,
   Dialog,
   DialogActions,
@@ -15,11 +16,16 @@ import { Place } from "@mui/icons-material";
 import { getProblemMessage } from "@/core/api/errors";
 import type { DestinationFormData } from "@/features/destinations/api/types";
 import {
+  normalizeSearchText,
+  useItalianProvinces,
+} from "@/core/geo/italian-address-data";
+import {
   FeatureDialogTitle,
   formDialogActionsEndSx,
   formDialogContentSx,
   formDialogPrimaryActionSx,
 } from "@/shared/ui/form-dialog-frame";
+import { ItalianMunicipalityAutocomplete } from "@/shared/ui/italian-municipality-autocomplete";
 
 const emptyDestinationForm: DestinationFormData = {
   organizationId: "",
@@ -51,6 +57,7 @@ export function DestinationFormDialog({
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { options: provinces } = useItalianProvinces();
 
   useEffect(() => {
     if (!open) {
@@ -64,6 +71,16 @@ export function DestinationFormDialog({
   const title = useMemo(
     () => (mode === "create" ? "Nuova destinazione" : "Modifica destinazione"),
     [mode],
+  );
+
+  const selectedProvinceOption = useMemo(
+    () =>
+      provinces.find(
+        (province) =>
+          normalizeSearchText(province.sigla) ===
+          normalizeSearchText(formValues.province),
+      ) ?? null,
+    [formValues.province, provinces],
   );
 
   const handleFieldChange = <T extends keyof DestinationFormData>(
@@ -128,19 +145,46 @@ export function DestinationFormDialog({
                 handleFieldChange("address", event.target.value)
               }
             />
-            <TextField
-              label="Citta"
+            <ItalianMunicipalityAutocomplete
+              label="Comune"
               value={formValues.city}
-              onChange={(event) =>
-                handleFieldChange("city", event.target.value)
-              }
+              onCityChange={(value) => handleFieldChange("city", value)}
+              onMunicipalitySelected={(option) => {
+                if (option?.province) {
+                  handleFieldChange("province", option.province);
+                }
+              }}
             />
-            <TextField
-              label="Provincia"
-              value={formValues.province}
-              onChange={(event) =>
-                handleFieldChange("province", event.target.value)
+            <Autocomplete
+              freeSolo
+              options={provinces}
+              value={selectedProvinceOption ?? formValues.province}
+              getOptionLabel={(option) =>
+                typeof option === "string"
+                  ? option
+                  : `${option.sigla} - ${option.name}`
               }
+              onInputChange={(_, nextInputValue, reason) => {
+                if (reason === "input") {
+                  handleFieldChange("province", nextInputValue.toUpperCase());
+                }
+              }}
+              onChange={(_, option) => {
+                if (!option) {
+                  handleFieldChange("province", "");
+                  return;
+                }
+
+                if (typeof option === "string") {
+                  handleFieldChange("province", option.toUpperCase());
+                  return;
+                }
+
+                handleFieldChange("province", option.sigla);
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Provincia" />
+              )}
             />
             <TextField
               label="Note"
