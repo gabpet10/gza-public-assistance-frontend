@@ -39,6 +39,7 @@ import {
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -272,15 +273,6 @@ export function VehiclesWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "veicoli")}
-            >
-              Export Excel
-            </Button>
-            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -317,6 +309,15 @@ export function VehiclesWorkspace() {
               onClick={() => setIsDeleteDialogOpen(true)}
             >
               Elimina
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() => exportRowsToExcel(data, gridColumns, "veicoli")}
+            >
+              Export Excel
             </Button>
           </div>
         </div>
