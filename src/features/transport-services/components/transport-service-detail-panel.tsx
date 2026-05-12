@@ -32,6 +32,10 @@ import {
   workspaceDetailCloseButtonSx,
 } from "@/shared/ui/workspace-styles";
 import {
+  formatTransportDateTime as formatDateTime,
+  formatTransportPlannedWindow as formatPlannedWindow,
+} from "@/features/transport-services/components/transport-services-workspace-helpers";
+import {
   AccessibilityNew,
   AssignmentInd,
   CheckCircleOutline,
@@ -62,6 +66,8 @@ type TransportServiceDetailPanelProps = {
   onEdit: () => void;
   onDelete: () => void;
   onCancelService: () => void;
+  onEditTransportSheet: () => void;
+  onDeleteTransportSheet: () => void;
   onSelfAssign: () => void;
   onSelfRemove: () => void;
   onAssignVehicle: () => void;
@@ -73,6 +79,9 @@ type TransportServiceDetailPanelProps = {
   canCancel: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  canManageTransportSheetActions: boolean;
+  canEditTransportSheet: boolean;
+  canDeleteTransportSheet: boolean;
   canSelfAssign: boolean;
   canSelfRemove: boolean;
   canAssignVehicle: boolean;
@@ -82,56 +91,23 @@ type TransportServiceDetailPanelProps = {
   isVolunteerView: boolean;
   canOverrideRemoveVolunteer: boolean;
   canOverrideRemoveVehicle: boolean;
+  transportSheetSummary: {
+    sheetNumber: number | null;
+    reportDate: string;
+    destinationName: string;
+    destinationAddress: string;
+    destinationCity: string;
+    destinationProvince: string;
+    vehiclePlate: string;
+    startTime: string | null;
+    endTime: string | null;
+    kmDeparture: number | null;
+    kmArrival: number | null;
+    volunteerIds: string[];
+  } | null;
+  isTransportSheetSummaryLoading: boolean;
   onClose: () => void;
 };
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString("it-IT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-function formatPlannedWindow(
-  startValue: string | null,
-  endValue: string | null,
-) {
-  const startLabel = formatDateTime(startValue);
-  if (startLabel === "-") {
-    return "-";
-  }
-
-  if (!endValue) {
-    return `${startLabel} · fine non impostata`;
-  }
-
-  const parsedStart = startValue ? new Date(startValue) : null;
-  const parsedEnd = new Date(endValue);
-  if (
-    parsedStart &&
-    !Number.isNaN(parsedStart.getTime()) &&
-    !Number.isNaN(parsedEnd.getTime()) &&
-    parsedStart.toDateString() === parsedEnd.toDateString()
-  ) {
-    const endTime = parsedEnd.toLocaleTimeString("it-IT", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    return `${startLabel} - ${endTime}`;
-  }
-
-  return `${startLabel} - ${formatDateTime(endValue)}`;
-}
 
 function getDestinationLabel(service: TransportService) {
   return [service.dropoffAddress, service.dropoffCity, service.dropoffProvince]
@@ -238,6 +214,8 @@ export function TransportServiceDetailPanel({
   onEdit,
   onDelete,
   onCancelService,
+  onEditTransportSheet,
+  onDeleteTransportSheet,
   onSelfAssign,
   onSelfRemove,
   onAssignVehicle,
@@ -249,6 +227,9 @@ export function TransportServiceDetailPanel({
   canCancel,
   canEdit,
   canDelete,
+  canManageTransportSheetActions,
+  canEditTransportSheet,
+  canDeleteTransportSheet,
   canSelfAssign,
   canSelfRemove,
   canAssignVehicle,
@@ -258,6 +239,8 @@ export function TransportServiceDetailPanel({
   isVolunteerView,
   canOverrideRemoveVolunteer,
   canOverrideRemoveVehicle,
+  transportSheetSummary,
+  isTransportSheetSummaryLoading,
   onClose,
 }: TransportServiceDetailPanelProps) {
   const isExecutionOrClosedStatus =
@@ -288,6 +271,11 @@ export function TransportServiceDetailPanel({
               <Typography variant="sectionTitle">
                 {service?.clientDisplayName || service?.clientId || "Servizio"}
               </Typography>
+              {isTransportSheetSummaryLoading ? (
+                <Typography variant="bodySmall" color="text.secondary">
+                  Caricamento dati scheda...
+                </Typography>
+              ) : null}
             </div>
             <IconButton onClick={onClose} sx={workspaceDetailCloseButtonSx}>
               <VisibilityOutlined fontSize="small" />
@@ -734,6 +722,168 @@ export function TransportServiceDetailPanel({
                   </AccordionDetails>
                 </Accordion>
               </ContentCard>
+
+              {transportSheetSummary ? (
+                <ContentCard className="bg-white p-4">
+                  <Accordion disableGutters elevation={0} defaultExpanded>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Typography variant="sectionEyebrow">
+                        Dati effettivi trasporto
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 0 }}>
+                      <div className="overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[#f7f9fc]">
+                        <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                          <Typography
+                            variant="bodySmall"
+                            color="text.secondary"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Scheda
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            justifyContent="space-between"
+                            sx={{ width: "100%", minWidth: 0 }}
+                          >
+                            <Typography
+                              variant="bodyMedium"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              N. {transportSheetSummary.sheetNumber ?? "-"} ·{" "}
+                              {formatDateTime(transportSheetSummary.reportDate)}
+                            </Typography>
+                            {canManageTransportSheetActions ? (
+                              <div className="flex items-center gap-1">
+                                <Tooltip title="Modifica scheda">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      aria-label="Modifica scheda"
+                                      sx={{
+                                        width: 30,
+                                        height: 30,
+                                        borderRadius: "50%",
+                                        color: "#ffffff",
+                                        backgroundColor:
+                                          "var(--accent-secondary)",
+                                        "&:hover": {
+                                          backgroundColor:
+                                            "var(--accent-secondary)",
+                                          opacity: 0.9,
+                                        },
+                                        "&.Mui-disabled": {
+                                          backgroundColor:
+                                            "rgba(15, 109, 122, 0.24)",
+                                          color: "rgba(255, 255, 255, 0.7)",
+                                        },
+                                      }}
+                                      disabled={
+                                        isActionSubmitting ||
+                                        !canEditTransportSheet
+                                      }
+                                      onClick={onEditTransportSheet}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Elimina scheda">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      aria-label="Elimina scheda"
+                                      sx={{
+                                        width: 30,
+                                        height: 30,
+                                        borderRadius: "50%",
+                                        color: "#ffffff",
+                                        backgroundColor: "#c62828",
+                                        "&:hover": {
+                                          backgroundColor: "#b71c1c",
+                                        },
+                                        "&.Mui-disabled": {
+                                          backgroundColor:
+                                            "rgba(198, 40, 40, 0.32)",
+                                          color: "rgba(255, 255, 255, 0.7)",
+                                        },
+                                      }}
+                                      disabled={
+                                        isActionSubmitting ||
+                                        !canDeleteTransportSheet
+                                      }
+                                      onClick={onDeleteTransportSheet}
+                                    >
+                                      <DeleteOutline fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </div>
+                            ) : null}
+                          </Stack>
+                        </div>
+                        <div className="grid grid-cols-[170px,1fr] items-center gap-4 border-b border-[color:var(--border-soft)] px-4 py-3">
+                          <Typography
+                            variant="bodySmall"
+                            color="text.secondary"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Date/ora effettive
+                          </Typography>
+                          <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={{ xs: 0.25, md: 2 }}
+                          >
+                            <Typography
+                              variant="bodyMedium"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              Partenza:{" "}
+                              {formatDateTime(transportSheetSummary.startTime)}
+                            </Typography>
+                            <Typography
+                              variant="bodyMedium"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              Arrivo:{" "}
+                              {formatDateTime(transportSheetSummary.endTime)}
+                            </Typography>
+                          </Stack>
+                        </div>
+                        <div className="grid grid-cols-[170px,1fr] items-center gap-4 px-4 py-3">
+                          <Typography
+                            variant="bodySmall"
+                            color="text.secondary"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Chilometri
+                          </Typography>
+                          <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={{ xs: 0.25, md: 2 }}
+                          >
+                            <Typography
+                              variant="bodyMedium"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              Partenza:{" "}
+                              {transportSheetSummary.kmDeparture ?? "-"}
+                            </Typography>
+                            <Typography
+                              variant="bodyMedium"
+                              sx={{ fontWeight: 500 }}
+                            >
+                              Arrivo: {transportSheetSummary.kmArrival ?? "-"}
+                            </Typography>
+                          </Stack>
+                        </div>
+                      </div>
+                    </AccordionDetails>
+                  </Accordion>
+                </ContentCard>
+              ) : null}
 
               <ContentCard className="bg-white p-4">
                 <Accordion disableGutters elevation={0}>

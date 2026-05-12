@@ -154,6 +154,41 @@ function formatEventTimeRange(event: TransportCalendarEvent) {
   return start.format("DD/MM HH:mm");
 }
 
+function isDateOnlyValue(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isTimeOnlyValue(value: string) {
+  return /^\d{1,2}:\d{2}(:\d{2})?$/.test(value);
+}
+
+function toNormalizedTimeValue(value: string) {
+  const [rawHours, rawMinutes = "00", rawSeconds = "00"] = value.split(":");
+  const hours = rawHours.padStart(2, "0");
+  const minutes = rawMinutes.padStart(2, "0");
+  const seconds = rawSeconds.padStart(2, "0");
+
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function startOfSchedulerWeek(base: dayjs.Dayjs) {
+  return base.startOf("week").startOf("day");
+}
+
+function parseDayNumberFromText(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) {
+    return null;
+  }
+
+  return parsed;
+}
+
 export function TransportServicesCalendar({
   events,
   errorMessage,
@@ -349,26 +384,230 @@ export function TransportServicesCalendar({
     return new Date();
   }, [visibleDateIso]);
 
-  const extractSeedDateIso = (target: HTMLElement) => {
-    const slotElement = target.closest<HTMLElement>(
-      "[data-start], [data-date], [data-time], [datetime], .MuiEventCalendar-dayGridCell, .MuiEventCalendar-dayTimeGridCell, .MuiEventCalendar-timeGridCell",
-    );
+  const extractSeedDateIso = (
+    target: HTMLElement,
+    pointer?: { clientY: number },
+  ) => {
+    const container = target.closest<HTMLElement>(".MuiEventCalendar-root");
+    const chain: HTMLElement[] = [];
 
-    const candidateValues = [
-      slotElement?.getAttribute("data-start"),
-      slotElement?.getAttribute("data-date"),
-      slotElement?.getAttribute("data-time"),
-      slotElement?.getAttribute("datetime"),
-    ];
-
-    for (const candidate of candidateValues) {
-      if (!candidate) {
-        continue;
+    let current: HTMLElement | null = target;
+    while (current) {
+      chain.push(current);
+      if (container && current === container) {
+        break;
       }
 
-      const parsed = dayjs(candidate);
-      if (parsed.isValid()) {
-        return parsed.toISOString();
+      current = current.parentElement;
+    }
+
+    let closestDateOnly: string | null = null;
+    let closestTimeOnly: string | null = null;
+
+    for (const element of chain) {
+      const directDateTimeCandidates = [
+        element.getAttribute("data-start"),
+        element.getAttribute("datetime"),
+        element.getAttribute("data-date"),
+        element.getAttribute("data-time"),
+      ];
+
+      for (const rawCandidate of directDateTimeCandidates) {
+        const candidate = rawCandidate?.trim();
+        if (!candidate) {
+          continue;
+        }
+
+        if (isDateOnlyValue(candidate)) {
+          closestDateOnly = closestDateOnly ?? candidate;
+          continue;
+        }
+
+        if (isTimeOnlyValue(candidate)) {
+          closestTimeOnly = closestTimeOnly ?? toNormalizedTimeValue(candidate);
+          continue;
+        }
+
+        const parsed = dayjs(candidate);
+        if (parsed.isValid()) {
+          return parsed.toISOString();
+        }
+      }
+    }
+
+    if (closestDateOnly && closestTimeOnly) {
+      const combined = dayjs(`${closestDateOnly}T${closestTimeOnly}`);
+      if (combined.isValid()) {
+        return combined.toISOString();
+      }
+    }
+
+    if (view === "month") {
+      const monthCell = target.closest<HTMLElement>(
+        ".MuiEventCalendar-monthViewCell",
+      );
+
+      if (monthCell) {
+        const monthCellDateCandidates = [
+          monthCell.getAttribute("data-start"),
+          monthCell.getAttribute("datetime"),
+          monthCell.getAttribute("data-date"),
+        ];
+
+        const parsedFromCandidate = monthCellDateCandidates
+          .map((rawCandidate) => rawCandidate?.trim())
+          .filter((candidate): candidate is string => Boolean(candidate))
+          .map((candidate) => dayjs(candidate))
+          .find((candidate) => candidate.isValid());
+
+        if (parsedFromCandidate) {
+          return parsedFromCandidate.startOf("day").toISOString();
+        }
+
+        const dayLabelElement =
+          monthCell.querySelector<HTMLElement>(
+            ".MuiEventCalendar-monthViewCellNumber",
+          ) ??
+          target.closest<HTMLElement>(".MuiEventCalendar-monthViewCellNumber");
+        const dayOfMonth = parseDayNumberFromText(dayLabelElement?.textContent);
+
+        if (dayOfMonth) {
+          const visibleMonthDate = dayjs(calendarVisibleDate);
+          let monthBase = visibleMonthDate.startOf("month");
+
+          if (monthCell.hasAttribute("data-other-month")) {
+            const row = monthCell.closest<HTMLElement>(
+              ".MuiEventCalendar-monthViewRow",
+            );
+            const monthBody = row?.parentElement;
+            const rows = monthBody
+              ? Array.from(
+                  monthBody.querySelectorAll<HTMLElement>(
+                    ".MuiEventCalendar-monthViewRow",
+                  ),
+                )
+              : [];
+            const rowIndex = row ? rows.indexOf(row) : -1;
+
+            if (rowIndex >= 0) {
+              monthBase = monthBase.add(rowIndex <= 1 ? -1 : 1, "month");
+            } else {
+              monthBase = monthBase.add(dayOfMonth >= 20 ? -1 : 1, "month");
+            }
+          }
+
+          const parsedMonthCell = monthBase.date(dayOfMonth).startOf("day");
+          if (parsedMonthCell.isValid()) {
+            return parsedMonthCell.toISOString();
+          }
+        }
+      }
+    }
+
+    if (view === "day" || view === "week") {
+      const slotCell = target.closest<HTMLElement>("[role='gridcell']");
+      if (slotCell && pointer) {
+        const rect = slotCell.getBoundingClientRect();
+        if (rect.height > 0) {
+          const clampedY = Math.min(
+            Math.max(pointer.clientY, rect.top),
+            rect.bottom,
+          );
+          const dayProgress = (clampedY - rect.top) / rect.height;
+          const totalMinutes = 24 * 60;
+          const snappedMinutes = Math.min(
+            totalMinutes - 1,
+            Math.max(0, Math.round((dayProgress * totalMinutes) / 15) * 15),
+          );
+
+          const slotDateCandidates = [
+            slotCell.getAttribute("data-start"),
+            slotCell.getAttribute("datetime"),
+            slotCell.getAttribute("data-date"),
+          ];
+
+          const baseDayFromCell = slotDateCandidates
+            .map((rawCandidate) => rawCandidate?.trim())
+            .filter((candidate): candidate is string => Boolean(candidate))
+            .map((candidate) => dayjs(candidate))
+            .find((candidate) => candidate.isValid());
+
+          let baseDay =
+            view === "week"
+              ? startOfSchedulerWeek(dayjs(calendarVisibleDate))
+              : dayjs(calendarVisibleDate).startOf("day");
+
+          if (baseDayFromCell) {
+            baseDay = baseDayFromCell.startOf("day");
+          } else if (view === "week") {
+            let safeColumnIndex = 0;
+            const dayTimeColumn = target.closest<HTMLElement>(
+              ".MuiEventCalendar-dayTimeGridColumn",
+            );
+
+            if (dayTimeColumn && container) {
+              const allColumns = Array.from(
+                container.querySelectorAll<HTMLElement>(
+                  ".MuiEventCalendar-dayTimeGridColumn",
+                ),
+              );
+              const columnIndex = allColumns.indexOf(dayTimeColumn);
+              if (columnIndex >= 0) {
+                safeColumnIndex = Math.min(columnIndex, 6);
+              }
+            } else {
+              const labelledBy = slotCell.getAttribute("aria-labelledby") ?? "";
+              const dayMatch = labelledBy.match(
+                /DayTimeGridHeaderCell-(\d{1,2})/,
+              );
+              const dayOfMonth = dayMatch
+                ? Number.parseInt(dayMatch[1] ?? "", 10)
+                : Number.NaN;
+
+              if (Number.isInteger(dayOfMonth)) {
+                const weekStart = startOfSchedulerWeek(
+                  dayjs(calendarVisibleDate),
+                );
+                const derivedColumn = Array.from({ length: 7 }).findIndex(
+                  (_, index) =>
+                    weekStart.add(index, "day").date() === dayOfMonth,
+                );
+
+                if (derivedColumn >= 0) {
+                  safeColumnIndex = derivedColumn;
+                }
+              }
+            }
+
+            baseDay = startOfSchedulerWeek(dayjs(calendarVisibleDate)).add(
+              safeColumnIndex,
+              "day",
+            );
+          }
+
+          const fromGridCell = baseDay
+            .startOf("day")
+            .add(snappedMinutes, "minute");
+
+          if (fromGridCell.isValid()) {
+            return fromGridCell.toISOString();
+          }
+        }
+      }
+    }
+
+    if (closestDateOnly) {
+      const parsedDate = dayjs(closestDateOnly);
+      if (parsedDate.isValid()) {
+        return parsedDate.toISOString();
+      }
+    }
+
+    if (closestTimeOnly) {
+      const visibleDate = dayjs(calendarVisibleDate).format("YYYY-MM-DD");
+      const combined = dayjs(`${visibleDate}T${closestTimeOnly}`);
+      if (combined.isValid()) {
+        return combined.toISOString();
       }
     }
 
@@ -420,55 +659,17 @@ export function TransportServicesCalendar({
       event.preventDefault();
       event.stopPropagation();
       onSelectEvent(eventId);
-      return;
-    }
-
-    if (target.closest(".MuiEventCalendar-sidePanel")) {
-      return;
-    }
-
-    if (
-      target.closest(
-        "button, a, input, textarea, select, [role='button'], [aria-haspopup='menu']",
-      )
-    ) {
-      return;
-    }
-  };
-
-  const handleSchedulerDoubleClickCapture = (
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    const container = target.closest(".MuiEventCalendar-root");
-    if (!(container instanceof HTMLElement)) {
-      return;
-    }
-
-    if (target.closest(".MuiEventCalendar-headerToolbar")) {
-      return;
-    }
-
-    if (target.closest(".MuiEventCalendar-sidePanel")) {
-      return;
-    }
-
-    const eventId = getEventIdFromTarget(target);
-    if (eventId) {
-      event.preventDefault();
-      event.stopPropagation();
-      onSelectEvent(eventId);
       onOpenEventDetail(eventId);
       return;
     }
 
+    if (target.closest(".MuiEventCalendar-sidePanel")) {
+      return;
+    }
+
     if (
       target.closest(
-        "button, a, input, textarea, select, [role='button'], [aria-haspopup='menu']",
+        "button, a, input, textarea, select, [aria-haspopup='menu']",
       )
     ) {
       return;
@@ -477,7 +678,11 @@ export function TransportServicesCalendar({
     if (target.closest(".MuiEventCalendar-mainPanel")) {
       event.preventDefault();
       event.stopPropagation();
-      onCreateSlot(extractSeedDateIso(target));
+      onCreateSlot(
+        extractSeedDateIso(target, {
+          clientY: event.clientY,
+        }),
+      );
     }
   };
 
@@ -776,7 +981,6 @@ export function TransportServicesCalendar({
             <Box
               ref={calendarHostRef}
               onClickCapture={handleSchedulerClickCapture}
-              onDoubleClickCapture={handleSchedulerDoubleClickCapture}
               sx={{
                 border: "1px solid",
                 borderColor: "divider",

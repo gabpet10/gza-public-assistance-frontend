@@ -132,6 +132,7 @@ const emptyTransportServiceForm: TransportServiceFormData = {
   clientLabel: "",
   pickupDestinationId: "",
   pickupDestinationLabel: "",
+  pickupDestinationDescription: "",
   transportType: "sociale",
   scheduledAt: new Date().toISOString(),
   scheduledEnd: null,
@@ -194,6 +195,18 @@ function getClientPrelievoData(option: LookupOption | undefined) {
   };
 }
 
+function getDestinationDescription(option: LookupOption | undefined) {
+  const description = option?.description?.trim() ?? "";
+  if (description) {
+    return description;
+  }
+
+  return [option?.data?.address, option?.data?.city, option?.data?.province]
+    .map((value) => value?.trim() ?? "")
+    .filter(Boolean)
+    .join(", ");
+}
+
 const wizardSteps = [
   "Cliente e destinazione",
   "Pianificazione e note",
@@ -218,6 +231,7 @@ function normalizeInitialValues(
 
   return {
     ...values,
+    pickupDestinationDescription: values.pickupDestinationDescription ?? "",
     scheduledEnd: values.scheduledEnd ?? null,
     serviceStatus: values.serviceStatus ?? "pending",
     volunteerRoles: values.volunteerIds.map(
@@ -227,27 +241,12 @@ function normalizeInitialValues(
   };
 }
 
-function validateResources(values: TransportServiceFormData): string | null {
-  const hasVehicle = values.vehicleId.trim().length > 0;
-  const hasVolunteers = values.volunteerIds.length > 0;
-
-  if (hasVehicle === hasVolunteers) {
-    return null;
-  }
-
-  return "Per salvare le risorse devi selezionare sia veicolo sia almeno un volontario.";
+function validateResources(): string | null {
+  return null;
 }
 
 function shouldClearAssignedVolunteers(status: TransportServiceStatus) {
   return status === "pending" || status === "accepted";
-}
-
-function normalizeStatusFromResources(values: TransportServiceFormData) {
-  if (values.volunteerIds.length > 0) {
-    return "assigned" as TransportServiceStatus;
-  }
-
-  return values.serviceStatus === "pending" ? "pending" : "accepted";
 }
 
 export function TransportServiceFormDialog({
@@ -352,7 +351,7 @@ export function TransportServiceFormDialog({
     }
 
     if (step === 2) {
-      return validateResources(formValues);
+      return validateResources();
     }
 
     return null;
@@ -390,17 +389,7 @@ export function TransportServiceFormDialog({
     setIsSubmitting(true);
 
     try {
-      const submitValues: TransportServiceFormData = {
-        ...formValues,
-        serviceStatus:
-          formValues.volunteerIds.length > 0
-            ? "assigned"
-            : formValues.serviceStatus === "pending"
-              ? "pending"
-              : "accepted",
-      };
-
-      await onSubmit(submitValues);
+      await onSubmit(formValues);
       onClose();
     } catch (error) {
       setSubmitError(
@@ -577,6 +566,9 @@ export function TransportServiceFormDialog({
                               label:
                                 formValues.pickupDestinationLabel ||
                                 "Destinazione selezionata",
+                              description:
+                                formValues.pickupDestinationDescription ||
+                                undefined,
                             },
                           ]
                         : []
@@ -595,6 +587,9 @@ export function TransportServiceFormDialog({
                         ...current,
                         pickupDestinationId: ids[0] ?? "",
                         pickupDestinationLabel: selected?.label ?? "",
+                        pickupDestinationDescription: ids[0]
+                          ? getDestinationDescription(selected)
+                          : "",
                       }));
                     }}
                   />
@@ -913,10 +908,6 @@ export function TransportServiceFormDialog({
 
                           return index === 0 ? "driver" : "attendant";
                         }),
-                        serviceStatus:
-                          ids.length > 0
-                            ? "assigned"
-                            : normalizeStatusFromResources(current),
                       }));
                     }}
                   />
@@ -975,7 +966,8 @@ export function TransportServiceFormDialog({
                       ))
                     ) : (
                       <Typography variant="bodySmall" color="text.secondary">
-                        Seleziona almeno un volontario per impostare il ruolo.
+                        Nessun volontario selezionato. Puoi salvare anche solo
+                        il veicolo.
                       </Typography>
                     )}
                   </Stack>

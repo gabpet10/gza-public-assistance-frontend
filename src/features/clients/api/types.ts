@@ -1,6 +1,7 @@
 export type Client = {
   id: string;
   organizationId: string;
+  fiscalCode: string;
   firstName: string;
   lastName: string;
   fullName: string;
@@ -8,6 +9,8 @@ export type Client = {
   address: string;
   city: string;
   province: string;
+  aslNumber: string;
+  aslMunicipality: string;
   notes: string;
   createdAt: string;
 };
@@ -15,6 +18,7 @@ export type Client = {
 export type ClientDto = {
   id?: string | null;
   organizationId?: string | null;
+  fiscalCode?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   fullName?: string | null;
@@ -22,6 +26,8 @@ export type ClientDto = {
   address?: string | null;
   city?: string | null;
   province?: string | null;
+  aslNumber?: string | null;
+  aslMunicipality?: string | null;
   notes?: string | null;
   createdAt?: string | null;
 };
@@ -38,22 +44,28 @@ export type ClientPagedResultDto = {
 
 export type ClientUpsertRequestDto = {
   organizationId: string | null;
+  fiscalCode: string | null;
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
   address: string | null;
   city: string | null;
   province: string | null;
+  aslNumber: string | null;
+  aslMunicipality: string | null;
   notes: string | null;
 };
 
 export type ClientFormData = {
   organizationId: string;
+  fiscalCode: string;
   firstName: string;
   lastName: string;
   phone: string;
   address: string;
   city: string;
   province: string;
+  aslNumber: string;
+  aslMunicipality: string;
   notes: string;
 };

@@ -44,7 +44,6 @@ export type User = {
   email: string;
   firstName: string;
   lastName: string;
-  phone: string | null;
   isActive: boolean;
   userType: UserTypeValue;
   mustChangePassword: boolean;
@@ -57,7 +56,6 @@ export type UserDto = {
   email?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string | null;
   isActive?: boolean;
   userType?: string;
   mustChangePassword?: boolean;
@@ -80,7 +78,6 @@ export type UserCreateRequestDto = {
   password?: string | null;
   firstName?: string | null;
   lastName?: string | null;
-  phone?: string | null;
   isActive?: boolean;
   userType?: UserTypeValue | null;
 };
@@ -90,7 +87,6 @@ export type UserUpdateRequestDto = {
   password?: string | null;
   firstName?: string | null;
   lastName?: string | null;
-  phone?: string | null;
   isActive?: boolean;
   userType?: UserTypeValue | null;
 };
@@ -120,7 +116,6 @@ export type UserFormData = {
   password: string;
   firstName: string;
   lastName: string;
-  phone: string;
   isActive: boolean;
   userType: UserTypeValue;
 };
@@ -133,7 +128,6 @@ export type CreateUserForOrganizationInput = {
   password: string;
   firstName: string;
   lastName: string;
-  phone: string;
   isActive: boolean;
   userType: UserTypeValue;
 };

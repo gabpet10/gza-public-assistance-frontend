@@ -38,6 +38,7 @@ import {
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -50,7 +51,6 @@ function toDestinationSortField(field: string | undefined) {
   const sortFieldMap: Record<string, string> = {
     createdAt: "CreatedAt",
     name: "Name",
-    description: "Description",
     address: "Address",
     city: "City",
     province: "Province",
@@ -102,13 +102,6 @@ export function DestinationsWorkspace() {
         valueGetter: (_, row) => row.city || "-",
       },
       {
-        field: "description",
-        headerName: "Descrizione",
-        flex: 1,
-        minWidth: 220,
-        valueGetter: (_, row) => row.description || "-",
-      },
-      {
         field: "address",
         headerName: "Indirizzo",
         flex: 1,
@@ -144,7 +137,6 @@ export function DestinationsWorkspace() {
         ? {
             organizationId: selectedRow.organizationId,
             name: selectedRow.name,
-            description: selectedRow.description ?? "",
             address: selectedRow.address ?? "",
             city: selectedRow.city ?? "",
             province: selectedRow.province ?? "",
@@ -295,17 +287,6 @@ export function DestinationsWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() =>
-                exportRowsToExcel(data, gridColumns, "destinazioni")
-              }
-            >
-              Export Excel
-            </Button>
-            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -343,6 +324,17 @@ export function DestinationsWorkspace() {
             >
               Elimina
             </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() =>
+                exportRowsToExcel(data, gridColumns, "destinazioni")
+              }
+            >
+              Export Excel
+            </Button>
           </div>
         </div>
       </ContentCard>
@@ -351,7 +343,7 @@ export function DestinationsWorkspace() {
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
-            searchPlaceholder="Cerca destinazione per nome, citta, provincia o descrizione"
+            searchPlaceholder="Cerca destinazione per nome, citta, provincia o indirizzo"
             onSearchTextChange={setSearchText}
           />
 

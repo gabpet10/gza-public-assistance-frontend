@@ -8,9 +8,7 @@ import {
   Edit,
   ExpandLess,
   ExpandMore,
-  EventRepeat,
   FileDownload,
-  GroupAdd,
   LocalShipping,
   ViewList,
 } from "@mui/icons-material";
@@ -19,10 +17,6 @@ import {
   Box,
   Button,
   Collapse,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
   MenuItem,
   Snackbar,
@@ -34,11 +28,8 @@ import {
   Typography,
 } from "@mui/material";
 import dayjs from "dayjs";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import type { GridRowParams } from "@mui/x-data-grid";
-import { getErrorMessage } from "@/core/api/errors";
+import { ApiError, getErrorMessage } from "@/core/api/errors";
 import { useAuth } from "@/core/auth/auth-context";
 import { getEffectiveRoleFromSession } from "@/core/auth/roles";
 import {
@@ -47,18 +38,28 @@ import {
   getTransportCalendarEvents,
   searchTransportServices,
 } from "@/features/transport-services/api/transport-services-api";
+import {
+  createTransportSheet,
+  deleteTransportSheet,
+  getTransportSheetByTransportServiceId,
+  initializeTransportSheetByTransportServiceId,
+  updateTransportSheet,
+} from "@/features/transport-services/api/transport-sheets-api";
 import { searchClients } from "@/features/clients/api/clients-api";
 import { searchDestinations } from "@/features/destinations/api/destinations-api";
 import { searchVehicles } from "@/features/vehicles/api/vehicles-api";
 import { toVehicleTypeLabel } from "@/features/vehicles/api/types";
 import { searchVolunteers } from "@/features/volunteers/api/volunteers-api";
 import type {
-  TransportAssignmentRole,
   TransportCalendarEvent,
   TransportServiceFormData,
   TransportService,
   TransportServiceStatus,
 } from "@/features/transport-services/api/types";
+import type {
+  TransportSheet,
+  TransportSheetFormData,
+} from "@/features/transport-services/api/transport-sheets-types";
 import type {
   LookupOption,
   LookupSearchInput,
@@ -73,25 +74,17 @@ import {
 } from "@/features/transport-services/components/transport-services-grid";
 import { useExcelExport } from "@/shared/hooks/use-excel-export";
 import { useServerGridState } from "@/shared/hooks/use-server-grid-state";
-import {
-  useConfirmActionState,
-  useDialogState,
-} from "@/shared/hooks/use-dialog-confirm-state";
-import { ConfirmActionDialog } from "@/shared/ui/confirm-action-dialog";
+import { useDialogState } from "@/shared/hooks/use-dialog-confirm-state";
 import { ContentCard } from "@/shared/ui/content-card";
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import {
-  FeatureDialogTitle,
-  formDialogActionsEndSx,
-  formDialogContentSx,
-  formDialogPrimaryActionSx,
-} from "@/shared/ui/form-dialog-frame";
-import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
   workspaceViewToggleGroupSx,
 } from "@/shared/ui/workspace-styles";
 import {
+  type AssignDialogMember,
   mergeSelectedTransportService,
   normalizeLookupLabel,
   sanitizeTransportSortField,
@@ -101,16 +94,17 @@ import {
 } from "./transport-services-workspace-helpers";
 import { useTransportServiceMutations } from "./use-transport-service-mutations";
 import { TransportServiceDetailPanel } from "./transport-service-detail-panel";
+import { TransportSheetFormDialog } from "./transport-sheet-form-dialog";
+import { AssignVolunteersDialog } from "./assign-volunteers-dialog";
+import { AssignVehicleDialog } from "./assign-vehicle-dialog";
+import { RescheduleServiceDialog } from "./reschedule-service-dialog";
+import { DeleteTransportSheetDialog } from "./delete-transport-sheet-dialog";
+import { CancelTransportServiceDialog } from "./cancel-transport-service-dialog";
+import { DeleteTransportServiceDialog } from "./delete-transport-service-dialog";
 
 type WorkspaceView = "grid" | "calendar";
 type TransportStatusFilter = "OPEN" | TransportServiceStatus;
 type CalendarSchedulerView = "day" | "week" | "month" | "agenda";
-
-type AssignDialogMember = {
-  volunteerId: string;
-  label: string;
-  role: TransportAssignmentRole;
-};
 
 const statusFilterOptions: Array<{
   value: TransportStatusFilter;
@@ -124,6 +118,41 @@ const statusFilterOptions: Array<{
   { value: "completed", label: "Completato" },
   { value: "cancelled", label: "Annullato" },
 ];
+
+function toTransportSheetFormData(
+  sheet: TransportSheet,
+): TransportSheetFormData {
+  return {
+    sheetNumber: sheet.sheetNumber ?? undefined,
+    organizationId: sheet.organizationId,
+    reportDate: sheet.reportDate,
+    destinationName: sheet.destinationName,
+    destinationAddress: sheet.destinationAddress,
+    destinationCity: sheet.destinationCity,
+    destinationProvince: sheet.destinationProvince,
+    destinationNotes: sheet.destinationNotes,
+    clientFiscalCode: sheet.clientFiscalCode,
+    clientFirstName: sheet.clientFirstName,
+    clientLastName: sheet.clientLastName,
+    clientPhone: sheet.clientPhone,
+    clientAddress: sheet.clientAddress,
+    clientCity: sheet.clientCity,
+    clientProvince: sheet.clientProvince,
+    clientAslNumber: sheet.clientAslNumber,
+    clientAslMunicipality: sheet.clientAslMunicipality,
+    clientNotes: sheet.clientNotes,
+    vehiclePlate: sheet.vehiclePlate,
+    startTime: sheet.startTime ?? "",
+    endTime: sheet.endTime ?? "",
+    kmDeparture:
+      typeof sheet.kmDeparture === "number" ? String(sheet.kmDeparture) : "",
+    kmArrival:
+      typeof sheet.kmArrival === "number" ? String(sheet.kmArrival) : "",
+    notes: sheet.notes,
+    volunteerIds: sheet.volunteerIds,
+    volunteerDisplayNames: [],
+  };
+}
 
 export function TransportServicesWorkspace() {
   const { exportRowsToExcel } = useExcelExport();
@@ -185,32 +214,56 @@ export function TransportServicesWorkspace() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [assignTeamMembers, setAssignTeamMembers] = useState<
-    AssignDialogMember[]
-  >([]);
-  const [assignNote, setAssignNote] = useState("");
-  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignDialogInitialTeamMembers, setAssignDialogInitialTeamMembers] =
+    useState<AssignDialogMember[]>([]);
+  const [assignDialogInitialNote, setAssignDialogInitialNote] = useState("");
   const [isVolunteerVehicleDialogOpen, setIsVolunteerVehicleDialogOpen] =
     useState(false);
-  const [volunteerVehicleId, setVolunteerVehicleId] = useState("");
-  const [volunteerVehicleLabel, setVolunteerVehicleLabel] = useState("");
-  const [volunteerVehicleDescription, setVolunteerVehicleDescription] =
+  const [vehicleDialogInitialId, setVehicleDialogInitialId] = useState("");
+  const [vehicleDialogInitialLabel, setVehicleDialogInitialLabel] =
     useState("");
-  const [volunteerVehicleNote, setVolunteerVehicleNote] = useState("");
-  const [volunteerVehicleError, setVolunteerVehicleError] = useState<
-    string | null
-  >(null);
+  const [vehicleDialogInitialDescription, setVehicleDialogInitialDescription] =
+    useState("");
+  const [vehicleDialogInitialNote, setVehicleDialogInitialNote] = useState("");
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
-  const [rescheduleAt, setRescheduleAt] = useState("");
-  const [rescheduleEndAt, setRescheduleEndAt] = useState("");
-  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [rescheduleDialogInitialAt, setRescheduleDialogInitialAt] =
+    useState("");
+  const [rescheduleDialogInitialEndAt, setRescheduleDialogInitialEndAt] =
+    useState("");
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isDeleteServiceDialogOpen, setIsDeleteServiceDialogOpen] =
+    useState(false);
+  const [isDeleteServiceSubmitting, setIsDeleteServiceSubmitting] =
+    useState(false);
+  const [deleteServiceError, setDeleteServiceError] = useState<string | null>(
+    null,
+  );
+  const [isTransportSheetDialogOpen, setIsTransportSheetDialogOpen] =
+    useState(false);
+  const [transportSheetId, setTransportSheetId] = useState<string | null>(null);
+  const [
+    isDeleteTransportSheetDialogOpen,
+    setIsDeleteTransportSheetDialogOpen,
+  ] = useState(false);
+  const [isDeletingTransportSheet, setIsDeletingTransportSheet] =
+    useState(false);
+  const [transportSheetFormValues, setTransportSheetFormValues] = useState<
+    TransportSheetFormData | undefined
+  >(undefined);
+  const [transportSheetError, setTransportSheetError] = useState<string | null>(
+    null,
+  );
+  const [isTransportSheetSubmitting, setIsTransportSheetSubmitting] =
+    useState(false);
+  const [detailTransportSheet, setDetailTransportSheet] =
+    useState<TransportSheet | null>(null);
+  const [isDetailTransportSheetLoading, setIsDetailTransportSheetLoading] =
+    useState(false);
   const [calendarCreateSeed, setCalendarCreateSeed] = useState<string | null>(
     null,
   );
   const createDialog = useDialogState(false);
   const editDialog = useDialogState(false);
-  const deleteDialog = useConfirmActionState();
 
   const {
     actionError,
@@ -221,11 +274,11 @@ export function TransportServicesWorkspace() {
     createService,
     editService,
     assignResources,
+    assignVehicle,
     shiftCalendarEvent,
     rescheduleService,
     acceptService,
     startService,
-    completeService,
     cancelService,
     volunteerSelfAssign,
     volunteerSelfRemove,
@@ -362,6 +415,7 @@ export function TransportServicesWorkspace() {
         selectedTransportService.pickupDestinationDisplayName,
         selectedTransportService.pickupDestinationId,
       ),
+      pickupDestinationDescription: "",
       transportType: selectedTransportService.transportType,
       scheduledAt: selectedTransportService.scheduledAt,
       scheduledEnd: selectedTransportService.scheduledEnd ?? null,
@@ -398,6 +452,7 @@ export function TransportServicesWorkspace() {
       clientLabel: "",
       pickupDestinationId: "",
       pickupDestinationLabel: "",
+      pickupDestinationDescription: "",
       transportType: "sociale",
       scheduledAt: normalizedStart.toISOString(),
       scheduledEnd: normalizedStart.add(1, "hour").toISOString(),
@@ -457,6 +512,43 @@ export function TransportServicesWorkspace() {
   }, [openedServiceId]);
 
   useEffect(() => {
+    if (!openedServiceId || !selectedTransportService) {
+      setDetailTransportSheet(null);
+      setIsDetailTransportSheetLoading(false);
+      return;
+    }
+
+    let disposed = false;
+
+    const loadDetailTransportSheet = async () => {
+      setIsDetailTransportSheetLoading(true);
+
+      try {
+        const sheet = await getTransportSheetByTransportServiceId(
+          selectedTransportService.id,
+        );
+        if (!disposed) {
+          setDetailTransportSheet(sheet);
+        }
+      } catch (error) {
+        if (!disposed && error instanceof ApiError && error.status === 404) {
+          setDetailTransportSheet(null);
+        }
+      } finally {
+        if (!disposed) {
+          setIsDetailTransportSheetLoading(false);
+        }
+      }
+    };
+
+    void loadDetailTransportSheet();
+
+    return () => {
+      disposed = true;
+    };
+  }, [openedServiceId, selectedTransportService, reloadKey]);
+
+  useEffect(() => {
     if (!editDialog.isOpen || !selectedServiceId) {
       return;
     }
@@ -509,12 +601,295 @@ export function TransportServicesWorkspace() {
     await startService(selectedTransportService.id);
   };
 
-  const handleCompleteService = async () => {
+  const loadTransportSheetForService = async (params: {
+    serviceId: string;
+    status: TransportServiceStatus;
+    fromAdvance: boolean;
+  }) => {
+    const { serviceId, status, fromAdvance } = params;
+
+    const shouldInitializeFirst = fromAdvance || status === "in_progress";
+    const mustAlreadyExist = status === "completed";
+
+    if (mustAlreadyExist) {
+      return getTransportSheetByTransportServiceId(serviceId);
+    }
+
+    if (shouldInitializeFirst) {
+      try {
+        return await initializeTransportSheetByTransportServiceId(serviceId);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          return getTransportSheetByTransportServiceId(serviceId);
+        }
+
+        throw error;
+      }
+    }
+
+    try {
+      return await getTransportSheetByTransportServiceId(serviceId);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        try {
+          return await initializeTransportSheetByTransportServiceId(serviceId);
+        } catch (initializeError) {
+          if (
+            initializeError instanceof ApiError &&
+            initializeError.status === 409
+          ) {
+            return getTransportSheetByTransportServiceId(serviceId);
+          }
+
+          throw initializeError;
+        }
+      }
+
+      throw error;
+    }
+  };
+
+  const openTransportSheetDialogWithData = (sheet: TransportSheet) => {
     if (!selectedTransportService) {
       return;
     }
 
-    await completeService(selectedTransportService.id);
+    const volunteerNameById = new Map(
+      selectedTransportService.volunteers.map((volunteer) => [
+        volunteer.volunteerId,
+        `${volunteer.fullName.trim() || volunteer.volunteerId} (${volunteer.role === "driver" ? "Autista" : "Accompagnatore"})`,
+      ]),
+    );
+    const mappedFormValues = toTransportSheetFormData(sheet);
+    const normalizedVolunteerIds =
+      mappedFormValues.volunteerIds.length > 0
+        ? mappedFormValues.volunteerIds
+        : selectedTransportService.volunteers.map(
+            (volunteer) => volunteer.volunteerId,
+          );
+    const volunteerDisplayNames = normalizedVolunteerIds.map(
+      (volunteerId) => volunteerNameById.get(volunteerId) ?? volunteerId,
+    );
+    const normalizedFormValues: TransportSheetFormData = {
+      ...mappedFormValues,
+      organizationId:
+        mappedFormValues.organizationId.trim() || scopedOrganizationId || "",
+      destinationAddress: mappedFormValues.destinationAddress,
+      volunteerIds: normalizedVolunteerIds,
+      volunteerDisplayNames,
+    };
+
+    setTransportSheetId(sheet.id ?? null);
+    setTransportSheetFormValues(normalizedFormValues);
+    setDetailTransportSheet(sheet);
+    setIsTransportSheetDialogOpen(true);
+  };
+
+  const handleOpenTransportSheetForEdit = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    if (!canOpenTransportSheet) {
+      setActionToast({
+        message:
+          "Non hai i permessi per compilare la scheda di questo servizio.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setIsTransportSheetSubmitting(true);
+    setTransportSheetError(null);
+
+    try {
+      const sheet = await getTransportSheetByTransportServiceId(
+        selectedTransportService.id,
+      );
+      openTransportSheetDialogWithData(sheet);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        const missingSheetMessage =
+          "Scheda trasporto non trovata: impossibile aprire la modifica.";
+        setTransportSheetError(missingSheetMessage);
+        setActionToast({ message: missingSheetMessage, severity: "warning" });
+        return;
+      }
+
+      const message = getErrorMessage(
+        error,
+        "Apertura scheda trasporto non riuscita.",
+      );
+      setTransportSheetError(message);
+      setActionToast({
+        message,
+        severity: "error",
+      });
+    } finally {
+      setIsTransportSheetSubmitting(false);
+    }
+  };
+
+  const handleOpenTransportSheet = async (options?: {
+    fromAdvance?: boolean;
+  }) => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    const fromAdvance = options?.fromAdvance === true;
+
+    if (!canOpenTransportSheet) {
+      setActionToast({
+        message:
+          "Non hai i permessi per compilare la scheda di questo servizio.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setIsTransportSheetSubmitting(true);
+    setTransportSheetError(null);
+
+    try {
+      const sheet: TransportSheet = await loadTransportSheetForService({
+        serviceId: selectedTransportService.id,
+        status: selectedTransportService.status,
+        fromAdvance,
+      });
+      openTransportSheetDialogWithData(sheet);
+    } catch (error) {
+      if (
+        selectedTransportService.status === "completed" &&
+        error instanceof ApiError &&
+        error.status === 404
+      ) {
+        const missingSheetMessage =
+          "Servizio completato ma scheda trasporto non trovata. Verifica allineamento backend.";
+        setTransportSheetError(missingSheetMessage);
+        setActionToast({ message: missingSheetMessage, severity: "error" });
+        return;
+      }
+
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Invalid transport-sheets payload")
+      ) {
+        const invalidPayloadMessage =
+          "Il backend ha risposto ma il DTO scheda e incompleto per l'apertura della form. Verifica i campi obbligatori della risposta initialize/get.";
+        setTransportSheetError(invalidPayloadMessage);
+        setActionToast({ message: invalidPayloadMessage, severity: "error" });
+        return;
+      }
+
+      const message = getErrorMessage(
+        error,
+        "Apertura scheda trasporto non riuscita.",
+      );
+      setTransportSheetError(message);
+      setActionToast({
+        message,
+        severity: "error",
+      });
+    } finally {
+      setIsTransportSheetSubmitting(false);
+    }
+  };
+
+  const handleSubmitTransportSheet = async (values: TransportSheetFormData) => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    setIsTransportSheetSubmitting(true);
+    setTransportSheetError(null);
+
+    try {
+      if (transportSheetId) {
+        const updatedSheet = await updateTransportSheet(
+          transportSheetId,
+          values,
+        );
+        setDetailTransportSheet(updatedSheet);
+      } else {
+        const createdSheet = await createTransportSheet(
+          selectedTransportService.id,
+          values,
+        );
+        setTransportSheetId(createdSheet.id ?? null);
+        setDetailTransportSheet(createdSheet);
+      }
+
+      setIsTransportSheetDialogOpen(false);
+      setReloadKey((current) => current + 1);
+
+      const refreshedService = await getTransportServiceById(
+        selectedTransportService.id,
+      );
+      setSelectedServiceFallback(refreshedService);
+    } catch (error) {
+      setTransportSheetError(
+        getErrorMessage(error, "Salvataggio scheda trasporto non riuscito."),
+      );
+    } finally {
+      setIsTransportSheetSubmitting(false);
+    }
+  };
+
+  const handleOpenDeleteTransportSheetDialog = () => {
+    if (!selectedTransportService || !canDeleteTransportSheet) {
+      return;
+    }
+
+    setTransportSheetError(null);
+    setIsDeleteTransportSheetDialogOpen(true);
+  };
+
+  const handleDeleteTransportSheet = async () => {
+    if (!selectedTransportService) {
+      return;
+    }
+
+    setIsDeletingTransportSheet(true);
+    setTransportSheetError(null);
+
+    try {
+      const existingSheet = await getTransportSheetByTransportServiceId(
+        selectedTransportService.id,
+      );
+
+      if (!existingSheet.id) {
+        throw new Error("Scheda trasporto senza identificativo eliminabile.");
+      }
+
+      await deleteTransportSheet(existingSheet.id);
+      setTransportSheetId(null);
+      setTransportSheetFormValues(undefined);
+      setDetailTransportSheet(null);
+      setIsDeleteTransportSheetDialogOpen(false);
+      setReloadKey((current) => current + 1);
+
+      const refreshedService = await getTransportServiceById(
+        selectedTransportService.id,
+      );
+      setSelectedServiceFallback(refreshedService);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        const notFoundMessage =
+          "Nessuna scheda trasporto da eliminare per questo servizio.";
+        setTransportSheetError(notFoundMessage);
+        setActionToast({ message: notFoundMessage, severity: "warning" });
+      } else {
+        const message = getErrorMessage(
+          error,
+          "Eliminazione scheda trasporto non riuscita.",
+        );
+        setTransportSheetError(message);
+        setActionToast({ message, severity: "error" });
+      }
+    } finally {
+      setIsDeletingTransportSheet(false);
+    }
   };
 
   const handleCancelService = async () => {
@@ -531,43 +906,35 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    setAssignTeamMembers(
+    setAssignDialogInitialTeamMembers(
       selectedTransportService.volunteers.map((volunteer) => ({
         volunteerId: volunteer.volunteerId,
         label: volunteer.fullName.trim(),
         role: volunteer.role,
       })),
     );
-    setAssignNote(selectedTransportService.note ?? "");
-    setAssignError(null);
+    setAssignDialogInitialNote(selectedTransportService.note ?? "");
     setIsAssignDialogOpen(true);
   };
 
-  const handleAssignResources = async () => {
+  const handleAssignResources = async (
+    teamMembers: AssignDialogMember[],
+    note: string,
+  ) => {
     if (!selectedTransportService || !session?.userId) {
-      return;
+      return false;
     }
-
-    if (assignTeamMembers.length === 0) {
-      setAssignError("Seleziona almeno un volontario.");
-      return;
-    }
-
-    setAssignError(null);
 
     const didAssign = await assignResources(
       selectedTransportService.id,
-      selectedTransportService.vehicleId ?? "",
-      assignTeamMembers.map((member) => ({
+      teamMembers.map((member) => ({
         volunteerId: member.volunteerId,
         role: member.role,
       })),
-      assignNote,
+      note,
     );
 
-    if (didAssign) {
-      setIsAssignDialogOpen(false);
-    }
+    return didAssign;
   };
 
   const handleVolunteerSelfAssign = async () => {
@@ -591,37 +958,31 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    setVolunteerVehicleId(selectedTransportService.vehicleId ?? "");
-    setVolunteerVehicleLabel(selectedTransportService.vehicleDisplayName ?? "");
-    setVolunteerVehicleDescription(
+    setVehicleDialogInitialId(selectedTransportService.vehicleId ?? "");
+    setVehicleDialogInitialLabel(
+      selectedTransportService.vehicleDisplayName ?? "",
+    );
+    setVehicleDialogInitialDescription(
       selectedTransportService.vehicleDescription ?? "",
     );
-    setVolunteerVehicleNote(selectedTransportService.note ?? "");
-    setVolunteerVehicleError(null);
+    setVehicleDialogInitialNote(selectedTransportService.note ?? "");
     setIsVolunteerVehicleDialogOpen(true);
   };
 
-  const handleVolunteerAssignVehicle = async () => {
+  const handleAssignVehicle = async (vehicleId: string, note: string) => {
     if (!selectedTransportService) {
-      return;
+      return false;
     }
 
-    if (!volunteerVehicleId.trim()) {
-      setVolunteerVehicleError("Seleziona un veicolo.");
-      return;
-    }
+    const didAssign = isVolunteer
+      ? await volunteerAssignVehicle(
+          selectedTransportService.id,
+          vehicleId,
+          note,
+        )
+      : await assignVehicle(selectedTransportService.id, vehicleId, note);
 
-    setVolunteerVehicleError(null);
-
-    const didAssign = await volunteerAssignVehicle(
-      selectedTransportService.id,
-      volunteerVehicleId,
-      volunteerVehicleNote,
-    );
-
-    if (didAssign) {
-      setIsVolunteerVehicleDialogOpen(false);
-    }
+    return didAssign;
   };
 
   const handleVolunteerRemoveVehicle = async () => {
@@ -653,40 +1014,20 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    setRescheduleAt(selectedTransportService.scheduledAt);
-    setRescheduleEndAt(selectedTransportService.scheduledEnd ?? "");
-    setRescheduleError(null);
+    setRescheduleDialogInitialAt(selectedTransportService.scheduledAt);
+    setRescheduleDialogInitialEndAt(
+      selectedTransportService.scheduledEnd ?? "",
+    );
     setIsRescheduleDialogOpen(true);
   };
 
-  const handleRescheduleService = async () => {
+  const handleRescheduleService = async (
+    nextScheduledAt: string,
+    nextScheduledEnd: string | null,
+  ) => {
     if (!selectedTransportService) {
-      return;
+      return false;
     }
-
-    if (!rescheduleAt) {
-      setRescheduleError("Seleziona una data valida.");
-      return;
-    }
-
-    if (rescheduleEndAt) {
-      const parsedStart = new Date(rescheduleAt).getTime();
-      const parsedEnd = new Date(rescheduleEndAt).getTime();
-
-      if (Number.isNaN(parsedStart) || Number.isNaN(parsedEnd)) {
-        setRescheduleError("Inserisci data e ora valide.");
-        return;
-      }
-
-      if (parsedEnd <= parsedStart) {
-        setRescheduleError(
-          "La data/ora di fine deve essere successiva alla data/ora di inizio.",
-        );
-        return;
-      }
-    }
-
-    setRescheduleError(null);
 
     const expectedVersion =
       selectedTransportService.scheduleVersion > 0
@@ -697,14 +1038,12 @@ export function TransportServicesWorkspace() {
       selectedTransportService.id,
       selectedTransportService.scheduledAt,
       selectedTransportService.scheduledEnd,
-      rescheduleAt,
-      rescheduleEndAt || null,
+      nextScheduledAt,
+      nextScheduledEnd,
       expectedVersion,
     );
 
-    if (didReschedule) {
-      setIsRescheduleDialogOpen(false);
-    }
+    return didReschedule;
   };
 
   const handleDeleteService = async () => {
@@ -712,12 +1051,22 @@ export function TransportServicesWorkspace() {
       return;
     }
 
-    await deleteDialog.run(async () => {
+    setDeleteServiceError(null);
+    setIsDeleteServiceSubmitting(true);
+
+    try {
       await deleteTransportService(selectedTransportService.id);
       setSelectedServiceId(null);
       setSelectedServiceFallback(null);
       setReloadKey((current) => current + 1);
-    }, "Eliminazione servizio non riuscita.");
+      setIsDeleteServiceDialogOpen(false);
+    } catch (error) {
+      setDeleteServiceError(
+        getErrorMessage(error, "Eliminazione servizio non riuscita."),
+      );
+    } finally {
+      setIsDeleteServiceSubmitting(false);
+    }
   };
 
   const handleStatusFilterChange = (value: TransportStatusFilter) => {
@@ -927,7 +1276,14 @@ export function TransportServicesWorkspace() {
           id: item.id,
           label: item.name,
           description:
-            [item.city, item.province].filter(Boolean).join(" ") || undefined,
+            [item.address, item.city, item.province]
+              .filter(Boolean)
+              .join(", ") || undefined,
+          data: {
+            address: item.address,
+            city: item.city,
+            province: item.province,
+          },
         }),
       ),
       hasNextPage: response.hasNextPage,
@@ -992,13 +1348,16 @@ export function TransportServicesWorkspace() {
     (selectedTransportService?.status === "accepted" ||
       selectedTransportService?.status === "assigned");
   const canReschedule = canCancel;
+
   const canEdit = Boolean(
     canManageServiceCrud &&
     selectedTransportService?.status !== "in_progress" &&
     selectedTransportService?.status !== "completed" &&
     selectedTransportService?.status !== "cancelled",
   );
-  const canDelete = Boolean(canManageServiceCrud);
+  const canDelete = Boolean(
+    canManageServiceCrud && selectedTransportService?.status !== "cancelled",
+  );
 
   const isCurrentVolunteerAssigned = Boolean(
     isVolunteer &&
@@ -1008,6 +1367,23 @@ export function TransportServicesWorkspace() {
       (volunteer) => volunteer.userId === session.userId,
     ),
   );
+
+  const canOpenTransportSheet = Boolean(
+    selectedTransportService &&
+    (canManageServiceCrud || (isVolunteer && isCurrentVolunteerAssigned)),
+  );
+
+  const canManageTransportSheetActions = Boolean(
+    selectedTransportService &&
+    (canManageServiceCrud || (isVolunteer && isCurrentVolunteerAssigned)),
+  );
+
+  const canEditTransportSheet = Boolean(
+    canManageTransportSheetActions &&
+    selectedTransportService?.status !== "cancelled",
+  );
+
+  const canDeleteTransportSheet = canEditTransportSheet;
 
   const canVolunteerAccept = Boolean(
     isVolunteer &&
@@ -1044,7 +1420,7 @@ export function TransportServicesWorkspace() {
     }
 
     if (selectedTransportService.status === "in_progress") {
-      return "Completato";
+      return "Compila scheda";
     }
 
     return null;
@@ -1071,7 +1447,7 @@ export function TransportServicesWorkspace() {
     }
 
     if (selectedTransportService.status === "in_progress") {
-      void handleCompleteService();
+      void handleOpenTransportSheet({ fromAdvance: true });
     }
   };
 
@@ -1164,16 +1540,17 @@ export function TransportServicesWorkspace() {
                       return;
                     }
 
-                    deleteDialog.open();
+                    setDeleteServiceError(null);
+                    setIsDeleteServiceDialogOpen(true);
                   }}
                 >
                   Elimina
                 </Button>
                 <Button
-                  variant="outlined"
+                  variant="contained"
                   size="small"
                   startIcon={<FileDownload />}
-                  sx={{ minHeight: 34, px: 1.35 }}
+                  sx={workspaceCompactPrimaryActionButtonSx}
                   onClick={() =>
                     exportRowsToExcel(
                       rows,
@@ -1417,8 +1794,17 @@ export function TransportServicesWorkspace() {
             return;
           }
 
-          deleteDialog.open();
+          setDeleteServiceError(null);
+          setIsDeleteServiceDialogOpen(true);
         }}
+        onEditTransportSheet={() => {
+          if (!canEditTransportSheet) {
+            return;
+          }
+
+          void handleOpenTransportSheetForEdit();
+        }}
+        onDeleteTransportSheet={handleOpenDeleteTransportSheetDialog}
         onCancelService={() => setIsCancelDialogOpen(true)}
         onSelfAssign={() => {
           void handleVolunteerSelfAssign();
@@ -1445,6 +1831,11 @@ export function TransportServicesWorkspace() {
         canCancel={Boolean(canCancel)}
         canEdit={canEdit}
         canDelete={canDelete}
+        canManageTransportSheetActions={canManageTransportSheetActions}
+        canEditTransportSheet={canEditTransportSheet}
+        canDeleteTransportSheet={canDeleteTransportSheet}
+        transportSheetSummary={detailTransportSheet}
+        isTransportSheetSummaryLoading={isDetailTransportSheetLoading}
         canSelfAssign={canVolunteerAccept}
         canSelfRemove={canVolunteerRemove}
         canAssignVehicle={canChangeVehicle}
@@ -1490,328 +1881,72 @@ export function TransportServicesWorkspace() {
         onSubmit={handleEditService}
       />
 
-      <Dialog
-        open={isAssignDialogOpen}
-        onClose={
-          isActionSubmitting ? undefined : () => setIsAssignDialogOpen(false)
-        }
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle sx={{ pb: 1.25 }}>
-          <FeatureDialogTitle
-            icon={<GroupAdd sx={{ fontSize: 20 }} />}
-            eyebrow="Assegna volontari"
-          />
-        </DialogTitle>
-        <DialogContent sx={formDialogContentSx}>
-          <Stack spacing={2.5} sx={{ pt: 1.5 }}>
-            {assignError ? <Alert severity="error">{assignError}</Alert> : null}
-
-            <EntityLookupDialogField
-              label="Volontari"
-              dialogTitle="Seleziona volontari"
-              value={assignTeamMembers.map((member) => member.volunteerId)}
-              selectedOptions={assignTeamMembers.map((member) => ({
-                id: member.volunteerId,
-                label: member.label,
-              }))}
-              multiple
-              required
-              disabled={isActionSubmitting || !scopedOrganizationId}
-              triggerAriaLabel="Apri ricerca volontari"
-              onSearch={(input) =>
-                scopedOrganizationId
-                  ? searchVolunteerLookup(input, scopedOrganizationId)
-                  : Promise.resolve({ items: [], hasNextPage: false })
-              }
-              onChange={(ids, options) => {
-                setAssignTeamMembers((current) =>
-                  ids.map((id, index) => {
-                    const existing = current.find(
-                      (member) => member.volunteerId === id,
-                    );
-                    const option = options.find((item) => item.id === id);
-
-                    return {
-                      volunteerId: id,
-                      label: option?.label ?? existing?.label ?? "",
-                      role:
-                        existing?.role ??
-                        (index === 0 ? "driver" : "attendant"),
-                    };
-                  }),
-                );
-              }}
-            />
-
-            <Stack spacing={1}>
-              <Typography variant="sectionEyebrow">
-                Ruolo per volontario
-              </Typography>
-              {assignTeamMembers.length ? (
-                assignTeamMembers.map((member) => (
-                  <Stack
-                    key={member.volunteerId}
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1.25}
-                  >
-                    <TextField
-                      label="Volontario"
-                      value={member.label}
-                      disabled
-                      fullWidth
-                    />
-                    <TextField
-                      select
-                      label="Ruolo"
-                      value={member.role}
-                      onChange={(event) => {
-                        const nextRole = event.target
-                          .value as TransportAssignmentRole;
-                        setAssignTeamMembers((current) =>
-                          current.map((currentMember) =>
-                            currentMember.volunteerId === member.volunteerId
-                              ? { ...currentMember, role: nextRole }
-                              : currentMember,
-                          ),
-                        );
-                      }}
-                      fullWidth
-                    >
-                      <MenuItem value="driver">Autista</MenuItem>
-                      <MenuItem value="attendant">Accompagnatore</MenuItem>
-                    </TextField>
-                  </Stack>
-                ))
-              ) : (
-                <Typography variant="bodySmall" color="text.secondary">
-                  Seleziona almeno un volontario da assegnare.
-                </Typography>
-              )}
-            </Stack>
-
-            <TextField
-              label="Note assegnazione"
-              value={assignNote}
-              onChange={(event) => setAssignNote(event.target.value)}
-              multiline
-              minRows={2}
-              disabled={isActionSubmitting}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={formDialogActionsEndSx}>
-          <Button
-            variant="outlined"
-            color="error"
-            disabled={isActionSubmitting}
-            onClick={() => setIsAssignDialogOpen(false)}
-          >
-            Annulla
-          </Button>
-          <Button
-            variant="contained"
-            sx={formDialogPrimaryActionSx}
-            disabled={isActionSubmitting}
-            onClick={() => {
-              void handleAssignResources();
-            }}
-          >
-            {isActionSubmitting ? "Assegnazione..." : "Conferma assegnazione"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={isVolunteerVehicleDialogOpen}
-        onClose={
-          isActionSubmitting
-            ? undefined
-            : () => setIsVolunteerVehicleDialogOpen(false)
-        }
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle sx={{ pb: 1.25 }}>
-          <FeatureDialogTitle
-            icon={<LocalShipping sx={{ fontSize: 20 }} />}
-            eyebrow="Gestione veicolo"
-          />
-        </DialogTitle>
-        <DialogContent sx={formDialogContentSx}>
-          <Stack spacing={2.5} sx={{ pt: 1.5 }}>
-            {volunteerVehicleError ? (
-              <Alert severity="error">{volunteerVehicleError}</Alert>
-            ) : null}
-
-            <EntityLookupDialogField
-              label="Veicolo"
-              dialogTitle="Seleziona veicolo"
-              value={volunteerVehicleId ? [volunteerVehicleId] : []}
-              selectedOptions={
-                volunteerVehicleId
-                  ? [
-                      {
-                        id: volunteerVehicleId,
-                        label: volunteerVehicleLabel || volunteerVehicleId,
-                        description: volunteerVehicleDescription || undefined,
-                      },
-                    ]
-                  : []
-              }
-              required
-              disabled={isActionSubmitting || !scopedOrganizationId}
-              triggerAriaLabel="Apri ricerca veicolo"
-              onSearch={(input) =>
-                scopedOrganizationId
-                  ? searchVehicleLookup(input, scopedOrganizationId)
-                  : Promise.resolve({ items: [], hasNextPage: false })
-              }
-              onChange={(ids, options) => {
-                setVolunteerVehicleId(ids[0] ?? "");
-                setVolunteerVehicleLabel(options[0]?.label ?? "");
-                setVolunteerVehicleDescription(options[0]?.description ?? "");
-              }}
-            />
-
-            <TextField
-              label="Note"
-              value={volunteerVehicleNote}
-              onChange={(event) => setVolunteerVehicleNote(event.target.value)}
-              multiline
-              minRows={2}
-              disabled={isActionSubmitting}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={formDialogActionsEndSx}>
-          <Button
-            variant="outlined"
-            color="error"
-            disabled={isActionSubmitting}
-            onClick={() => setIsVolunteerVehicleDialogOpen(false)}
-          >
-            Annulla
-          </Button>
-          <Button
-            variant="contained"
-            sx={formDialogPrimaryActionSx}
-            disabled={isActionSubmitting}
-            onClick={() => {
-              void handleVolunteerAssignVehicle();
-            }}
-          >
-            {isActionSubmitting ? "Salvataggio..." : "Conferma veicolo"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={isRescheduleDialogOpen}
-        onClose={
-          isActionSubmitting
-            ? undefined
-            : () => setIsRescheduleDialogOpen(false)
-        }
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle sx={{ pb: 1.25 }}>
-          <FeatureDialogTitle
-            icon={<EventRepeat sx={{ fontSize: 20 }} />}
-            eyebrow="Ripianifica servizio"
-          />
-        </DialogTitle>
-        <DialogContent sx={formDialogContentSx}>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Stack spacing={2.5} sx={{ pt: 1.5 }}>
-              {rescheduleError ? (
-                <Alert severity="error">{rescheduleError}</Alert>
-              ) : null}
-
-              <DateTimePicker
-                label="Nuova data e ora inizio"
-                value={rescheduleAt ? dayjs(rescheduleAt) : null}
-                onChange={(value) =>
-                  setRescheduleAt(
-                    value && value.isValid()
-                      ? value.toDate().toISOString()
-                      : "",
-                  )
-                }
-                ampm={false}
-                slotProps={{
-                  textField: {
-                    required: true,
-                    disabled: isActionSubmitting,
-                  },
-                }}
-              />
-
-              <DateTimePicker
-                label="Nuova data e ora fine"
-                value={rescheduleEndAt ? dayjs(rescheduleEndAt) : null}
-                onChange={(value) =>
-                  setRescheduleEndAt(
-                    value && value.isValid()
-                      ? value.toDate().toISOString()
-                      : "",
-                  )
-                }
-                ampm={false}
-                slotProps={{
-                  textField: {
-                    disabled: isActionSubmitting,
-                    helperText: "Opzionale",
-                  },
-                }}
-              />
-            </Stack>
-          </LocalizationProvider>
-        </DialogContent>
-        <DialogActions sx={formDialogActionsEndSx}>
-          <Button
-            variant="outlined"
-            color="error"
-            disabled={isActionSubmitting}
-            onClick={() => setIsRescheduleDialogOpen(false)}
-          >
-            Annulla
-          </Button>
-          <Button
-            variant="contained"
-            sx={formDialogPrimaryActionSx}
-            disabled={isActionSubmitting}
-            onClick={() => {
-              void handleRescheduleService();
-            }}
-          >
-            {isActionSubmitting ? "Salvataggio..." : "Conferma"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <ConfirmActionDialog
-        open={isCancelDialogOpen}
-        title="Annullare il servizio selezionato?"
-        description="Lo stato del servizio passera ad annullato. L'operazione e tracciata e non distruttiva."
-        confirmLabel="Conferma annullamento"
-        onClose={() => setIsCancelDialogOpen(false)}
-        onConfirm={handleCancelService}
-        isConfirming={isActionSubmitting}
-        errorMessage={actionError}
+      <TransportSheetFormDialog
+        open={isTransportSheetDialogOpen}
+        isSubmitting={isTransportSheetSubmitting}
+        submitError={transportSheetError}
+        initialValues={transportSheetFormValues}
+        onClose={() => {
+          setIsTransportSheetDialogOpen(false);
+        }}
+        onSubmit={handleSubmitTransportSheet}
       />
 
-      <ConfirmActionDialog
-        open={deleteDialog.isOpen}
-        title="Eliminare il servizio selezionato?"
-        description="L'operazione elimina definitivamente il servizio di trasporto selezionato."
-        confirmLabel="Conferma eliminazione"
-        onClose={deleteDialog.close}
+      <AssignVolunteersDialog
+        open={isAssignDialogOpen}
+        isSubmitting={isActionSubmitting}
+        organizationId={scopedOrganizationId}
+        initialTeamMembers={assignDialogInitialTeamMembers}
+        initialNote={assignDialogInitialNote}
+        onSearchVolunteers={searchVolunteerLookup}
+        onClose={() => setIsAssignDialogOpen(false)}
+        onSubmit={handleAssignResources}
+      />
+
+      <AssignVehicleDialog
+        open={isVolunteerVehicleDialogOpen}
+        isSubmitting={isActionSubmitting}
+        organizationId={scopedOrganizationId}
+        initialVehicleId={vehicleDialogInitialId}
+        initialVehicleLabel={vehicleDialogInitialLabel}
+        initialVehicleDescription={vehicleDialogInitialDescription}
+        initialNote={vehicleDialogInitialNote}
+        onSearchVehicles={searchVehicleLookup}
+        onClose={() => setIsVolunteerVehicleDialogOpen(false)}
+        onSubmit={handleAssignVehicle}
+      />
+
+      <RescheduleServiceDialog
+        open={isRescheduleDialogOpen}
+        isSubmitting={isActionSubmitting}
+        initialScheduledAt={rescheduleDialogInitialAt}
+        initialScheduledEnd={rescheduleDialogInitialEndAt}
+        onClose={() => setIsRescheduleDialogOpen(false)}
+        onSubmit={handleRescheduleService}
+      />
+
+      <DeleteTransportSheetDialog
+        open={isDeleteTransportSheetDialogOpen}
+        isConfirming={isDeletingTransportSheet}
+        errorMessage={transportSheetError}
+        onClose={() => setIsDeleteTransportSheetDialogOpen(false)}
+        onConfirm={handleDeleteTransportSheet}
+      />
+
+      <CancelTransportServiceDialog
+        open={isCancelDialogOpen}
+        isConfirming={isActionSubmitting}
+        errorMessage={actionError}
+        onClose={() => setIsCancelDialogOpen(false)}
+        onConfirm={handleCancelService}
+      />
+
+      <DeleteTransportServiceDialog
+        open={isDeleteServiceDialogOpen}
+        isConfirming={isDeleteServiceSubmitting}
+        errorMessage={deleteServiceError}
+        onClose={() => setIsDeleteServiceDialogOpen(false)}
         onConfirm={handleDeleteService}
-        isConfirming={deleteDialog.isSubmitting}
-        errorMessage={deleteDialog.errorMessage}
       />
 
       <Snackbar

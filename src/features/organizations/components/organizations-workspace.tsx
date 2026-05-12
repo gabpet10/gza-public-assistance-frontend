@@ -44,6 +44,7 @@ import {
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -356,17 +357,6 @@ export function OrganizationsWorkspace() {
             <Button
               variant="outlined"
               size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() =>
-                exportRowsToExcel(data, gridColumns, "organizzazioni")
-              }
-            >
-              Export Excel
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
               startIcon={<Apartment />}
               disabled={
                 !canEnterOrganizationContext || isEnteringOrganizationContext
@@ -415,6 +405,17 @@ export function OrganizationsWorkspace() {
               onClick={deleteDialog.open}
             >
               Elimina
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() =>
+                exportRowsToExcel(data, gridColumns, "organizzazioni")
+              }
+            >
+              Export Excel
             </Button>
           </div>
         </div>

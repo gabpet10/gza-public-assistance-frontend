@@ -58,7 +58,6 @@ function toUserModel(dto: UserDto): User {
     email: requireField(dto.email, "user.email"),
     firstName: requireField(dto.firstName, "user.firstName"),
     lastName: requireField(dto.lastName, "user.lastName"),
-    phone: dto.phone ?? null,
     isActive: requireField(dto.isActive, "user.isActive"),
     userType,
     mustChangePassword: requireField(
@@ -76,7 +75,6 @@ function toCreatePayload(input: UserFormData): UserCreateRequestDto {
     password: toNullableTrimmed(input.password),
     firstName: toNullableTrimmed(input.firstName),
     lastName: toNullableTrimmed(input.lastName),
-    phone: toNullableTrimmed(input.phone),
     isActive: input.isActive,
     userType: input.userType,
   };
@@ -90,7 +88,6 @@ function toUpdatePayload(input: UserFormData): UserUpdateRequestDto {
     password: normalizedPassword,
     firstName: toNullableTrimmed(input.firstName),
     lastName: toNullableTrimmed(input.lastName),
-    phone: toNullableTrimmed(input.phone),
     isActive: input.isActive,
     userType: input.userType,
   };

@@ -764,15 +764,6 @@ export function VolunteersWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "volontari")}
-            >
-              Export Excel
-            </Button>
-            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -812,6 +803,15 @@ export function VolunteersWorkspace() {
               }}
             >
               Elimina
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() => exportRowsToExcel(data, gridColumns, "volontari")}
+            >
+              Export Excel
             </Button>
           </div>
         </div>
@@ -1072,9 +1072,10 @@ export function VolunteersWorkspace() {
                     >
                       <Typography variant="sectionEyebrow">Skills</Typography>
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         size="small"
                         startIcon={<FileDownload />}
+                        sx={workspaceCompactPrimaryActionButtonSx}
                         disabled={!selectedVolunteer?.skills.length}
                         onClick={() =>
                           exportRowsToExcel(

@@ -152,7 +152,6 @@ export type TransportCalendarEvent = {
   clientDisplayName: string | null;
   pickupDestinationId: string;
   pickupDestinationName: string | null;
-  pickupDestinationDescription: string | null;
   pickupDestinationAddress: string | null;
   pickupDestinationCity: string | null;
   pickupDestinationProvince: string | null;
@@ -205,7 +204,6 @@ export type TransportCalendarEventDto = {
   pickupDestinationId?: string;
   pickupDestinationName?: string | null;
   pickupDestinationDisplayName?: string | null;
-  pickupDestinationDescription?: string | null;
   pickupDestinationAddress?: string | null;
   pickupDestinationCity?: string | null;
   pickupDestinationProvince?: string | null;
@@ -244,11 +242,13 @@ export type TransportServiceUpsertInput = {
   clientId: string;
   pickupDestinationId: string;
   transportType: TransportType;
+  status?: "pending" | "accepted";
   scheduledAt: string;
   scheduledEnd?: string | null;
   dropoffAddress: string;
   dropoffCity: string;
   dropoffProvince: string;
+  vehicleId?: string | null;
   isPaid: boolean;
   amount?: number | null;
   note?: string;
@@ -259,6 +259,7 @@ export type TransportServiceFormData = {
   clientLabel: string;
   pickupDestinationId: string;
   pickupDestinationLabel: string;
+  pickupDestinationDescription?: string;
   transportType: TransportType;
   scheduledAt: string;
   scheduledEnd: string | null;
@@ -282,18 +283,20 @@ export type TransportServiceUpsertRequestDto = {
   clientId?: string | null;
   pickupDestinationId?: string | null;
   transportType?: string | null;
+  status?: string | null;
   scheduledAt?: string | null;
   scheduledEnd?: string | null;
   dropoffAddress?: string | null;
   dropoffCity?: string | null;
   dropoffProvince?: string | null;
+  vehicleId?: string | null;
   isPaid?: boolean | null;
   amount?: number | null;
   note?: string | null;
 };
 
 export type AssignTransportServiceInput = {
-  vehicleId: string;
+  vehicleId?: string | null;
   assignedByUserId: string;
   teamMembers: TransportTeamMember[];
   note?: string;
@@ -322,6 +325,12 @@ export type SelfAssignTransportServiceRequestDto = {
 };
 
 export type AssignVehicleAsVolunteerInput = {
+  vehicleId: string;
+  note?: string;
+  changedAt?: string;
+};
+
+export type AssignVehicleToTransportServiceInput = {
   vehicleId: string;
   note?: string;
   changedAt?: string;

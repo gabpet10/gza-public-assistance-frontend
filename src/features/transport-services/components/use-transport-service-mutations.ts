@@ -2,9 +2,9 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { toApiUiError } from "@/core/api/errors";
 import {
   acceptTransportService,
+  assignVehicleToTransportService,
   assignTransportService,
   cancelTransportService,
-  completeTransportService,
   createTransportService,
   removeVehicleFromTransportService,
   removeVolunteerFromTransportService,
@@ -105,39 +105,48 @@ export function useTransportServiceMutations({
   ) => {
     let nextService = service;
 
-    if (
-      values.serviceStatus === "accepted" &&
-      nextService.status === "pending"
-    ) {
-      nextService = await acceptTransportService(nextService.id);
-    }
+    const requestedVehicleId = values.vehicleId.trim();
+    const normalizedVehicleId =
+      requestedVehicleId.length > 0 ? requestedVehicleId : null;
+    const hasVolunteers = values.volunteerIds.length > 0;
+    const shouldAssignResources = hasVolunteers;
+    const shouldAssignVehicle = normalizedVehicleId !== null;
 
-    const shouldAssignResources =
-      values.vehicleId.trim().length > 0 && values.volunteerIds.length > 0;
-    if (!shouldAssignResources) {
+    if (!shouldAssignResources && !shouldAssignVehicle) {
       return nextService;
     }
 
-    if (!sessionUserId) {
+    if (shouldAssignResources && !sessionUserId) {
       throw new Error(
         "Sessione utente non valida per assegnare le risorse del servizio.",
       );
     }
 
-    if (nextService.status === "pending") {
+    if (shouldAssignResources && nextService.status === "pending") {
       nextService = await acceptTransportService(nextService.id);
     }
 
-    return assignTransportService(nextService.id, {
-      vehicleId: values.vehicleId,
-      assignedByUserId: sessionUserId,
-      teamMembers: toAssignTeamMembers(
-        values.volunteerIds,
-        values.volunteerRoles,
-      ),
-      note: values.note || undefined,
-      assignedAt: new Date().toISOString(),
-    });
+    if (shouldAssignResources) {
+      nextService = await assignTransportService(nextService.id, {
+        assignedByUserId: sessionUserId!,
+        teamMembers: toAssignTeamMembers(
+          values.volunteerIds,
+          values.volunteerRoles,
+        ),
+        note: values.note || undefined,
+        assignedAt: new Date().toISOString(),
+      });
+    }
+
+    if (shouldAssignVehicle) {
+      nextService = await assignVehicleToTransportService(nextService.id, {
+        vehicleId: normalizedVehicleId,
+        note: values.note || undefined,
+        changedAt: new Date().toISOString(),
+      });
+    }
+
+    return nextService;
   };
 
   const createService = async (values: TransportServiceFormData) => {
@@ -150,11 +159,13 @@ export function useTransportServiceMutations({
       clientId: values.clientId,
       pickupDestinationId: values.pickupDestinationId,
       transportType: values.transportType,
+      status: values.serviceStatus === "accepted" ? "accepted" : "pending",
       scheduledAt: values.scheduledAt,
       scheduledEnd: values.scheduledEnd,
       dropoffAddress: values.dropoffAddress,
       dropoffCity: values.dropoffCity,
       dropoffProvince: values.dropoffProvince,
+      vehicleId: values.vehicleId,
       isPaid: values.isPaid,
       amount: values.amount,
       note: values.note || undefined,
@@ -174,11 +185,13 @@ export function useTransportServiceMutations({
       clientId: values.clientId,
       pickupDestinationId: values.pickupDestinationId,
       transportType: values.transportType,
+      status: values.serviceStatus === "accepted" ? "accepted" : "pending",
       scheduledAt: values.scheduledAt,
       scheduledEnd: values.scheduledEnd,
       dropoffAddress: values.dropoffAddress,
       dropoffCity: values.dropoffCity,
       dropoffProvince: values.dropoffProvince,
+      vehicleId: values.vehicleId,
       isPaid: values.isPaid,
       amount: values.amount,
       note: values.note || undefined,
@@ -190,7 +203,6 @@ export function useTransportServiceMutations({
 
   const assignResources = async (
     serviceId: string,
-    vehicleId: string,
     teamMembers: AssignResourceMember[],
     note: string,
   ) => {
@@ -201,13 +213,28 @@ export function useTransportServiceMutations({
     return executeServiceAction(
       () =>
         assignTransportService(serviceId, {
-          vehicleId,
           assignedByUserId: sessionUserId,
           teamMembers,
           note: note || undefined,
           assignedAt: new Date().toISOString(),
         }),
       "Assegnazione risorse non riuscita.",
+    );
+  };
+
+  const assignVehicle = async (
+    serviceId: string,
+    vehicleId: string,
+    note: string,
+  ) => {
+    return executeServiceAction(
+      () =>
+        assignVehicleToTransportService(serviceId, {
+          vehicleId,
+          note: note || undefined,
+          changedAt: new Date().toISOString(),
+        }),
+      "Aggiornamento veicolo non riuscito.",
     );
   };
 
@@ -271,6 +298,7 @@ export function useTransportServiceMutations({
     editService,
     executeServiceAction,
     assignResources,
+    assignVehicle,
     shiftCalendarEvent,
     rescheduleService,
     acceptService: (serviceId: string) =>
@@ -282,11 +310,6 @@ export function useTransportServiceMutations({
       executeServiceAction(
         () => startTransportService(serviceId),
         "Avvio servizio non riuscito.",
-      ),
-    completeService: (serviceId: string) =>
-      executeServiceAction(
-        () => completeTransportService(serviceId),
-        "Completamento servizio non riuscito.",
       ),
     cancelService: (serviceId: string) =>
       executeServiceAction(

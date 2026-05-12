@@ -33,12 +33,20 @@ export function getProblemMessage(problem?: ProblemDetails) {
 
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
   if (error instanceof ApiError) {
-    return getProblemMessage(error.problem) || fallbackMessage;
+    if (error.problem) {
+      return getProblemMessage(error.problem) || fallbackMessage;
+    }
+
+    return error.message || fallbackMessage;
   }
 
   if (error instanceof Error) {
     const errorWithProblem = error as Error & { problem?: ProblemDetails };
-    return getProblemMessage(errorWithProblem.problem) || fallbackMessage;
+    if (errorWithProblem.problem) {
+      return getProblemMessage(errorWithProblem.problem) || fallbackMessage;
+    }
+
+    return error.message || fallbackMessage;
   }
 
   return fallbackMessage;

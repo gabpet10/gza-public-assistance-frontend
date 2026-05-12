@@ -26,7 +26,6 @@ function toPayload(input: DestinationFormData): DestinationUpsertRequestDto {
   return {
     organizationId: toNullableTrimmed(input.organizationId),
     name: toNullableTrimmed(input.name),
-    description: toNullableTrimmed(input.description),
     address: toNullableTrimmed(input.address),
     city: toNullableTrimmed(input.city),
     province: toNullableTrimmed(input.province),
@@ -42,7 +41,6 @@ function toDestinationModel(dto: DestinationDto): Destination {
       "destination.organizationId",
     ),
     name: requireField(dto.name, "destination.name"),
-    description: requireField(dto.description, "destination.description"),
     address: requireField(dto.address, "destination.address"),
     city: requireField(dto.city, "destination.city"),
     province: requireField(dto.province, "destination.province"),

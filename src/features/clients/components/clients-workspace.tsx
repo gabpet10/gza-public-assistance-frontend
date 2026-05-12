@@ -35,6 +35,7 @@ import {
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -46,11 +47,14 @@ function toClientSortField(field: string | undefined) {
 
   const sortFieldMap: Record<string, string> = {
     createdAt: "CreatedAt",
+    fiscalCode: "FiscalCode",
     fullName: "FullName",
     phone: "Phone",
     address: "Address",
     city: "City",
     province: "Province",
+    aslNumber: "AslNumber",
+    aslMunicipality: "AslMunicipality",
     notes: "Notes",
   };
 
@@ -89,6 +93,13 @@ export function ClientsWorkspace() {
   const gridColumns = useMemo<GridColDef<Client>[]>(
     () => [
       {
+        field: "fiscalCode",
+        headerName: "Codice fiscale",
+        flex: 0.9,
+        minWidth: 170,
+        valueGetter: (_, row) => row.fiscalCode || "-",
+      },
+      {
         field: "fullName",
         headerName: "Cliente",
         flex: 1,
@@ -124,6 +135,20 @@ export function ClientsWorkspace() {
         valueGetter: (_, row) => row.province || "-",
       },
       {
+        field: "aslNumber",
+        headerName: "Numero ASL",
+        flex: 0.8,
+        minWidth: 150,
+        valueGetter: (_, row) => row.aslNumber || "-",
+      },
+      {
+        field: "aslMunicipality",
+        headerName: "Comune ASL",
+        flex: 0.9,
+        minWidth: 170,
+        valueGetter: (_, row) => row.aslMunicipality || "-",
+      },
+      {
         field: "notes",
         headerName: "Note",
         flex: 1.2,
@@ -144,12 +169,15 @@ export function ClientsWorkspace() {
       selectedRow
         ? {
             organizationId: selectedRow.organizationId,
+            fiscalCode: selectedRow.fiscalCode ?? "",
             firstName: selectedRow.firstName ?? "",
             lastName: selectedRow.lastName ?? "",
             phone: selectedRow.phone ?? "",
             address: selectedRow.address ?? "",
             city: selectedRow.city ?? "",
             province: selectedRow.province ?? "",
+            aslNumber: selectedRow.aslNumber ?? "",
+            aslMunicipality: selectedRow.aslMunicipality ?? "",
             notes: selectedRow.notes ?? "",
           }
         : undefined,
@@ -295,15 +323,6 @@ export function ClientsWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "clienti")}
-            >
-              Export Excel
-            </Button>
-            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -341,6 +360,15 @@ export function ClientsWorkspace() {
             >
               Elimina
             </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() => exportRowsToExcel(data, gridColumns, "clienti")}
+            >
+              Export Excel
+            </Button>
           </div>
         </div>
       </ContentCard>
@@ -349,7 +377,7 @@ export function ClientsWorkspace() {
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
-            searchPlaceholder="Cerca cliente per nome, telefono, citta o provincia"
+            searchPlaceholder="Cerca cliente per codice fiscale, nome, telefono, citta o ASL"
             onSearchTextChange={setSearchText}
           />
 

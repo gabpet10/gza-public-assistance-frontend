@@ -30,7 +30,6 @@ import { ItalianMunicipalityAutocomplete } from "@/shared/ui/italian-municipalit
 const emptyDestinationForm: DestinationFormData = {
   organizationId: "",
   name: "",
-  description: "",
   address: "",
   city: "",
   province: "",
@@ -128,15 +127,6 @@ export function DestinationFormDialog({
                 handleFieldChange("name", event.target.value)
               }
               required
-            />
-            <TextField
-              label="Descrizione"
-              value={formValues.description}
-              onChange={(event) =>
-                handleFieldChange("description", event.target.value)
-              }
-              multiline
-              minRows={2}
             />
             <TextField
               label="Indirizzo"

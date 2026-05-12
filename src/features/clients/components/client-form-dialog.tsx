@@ -29,12 +29,15 @@ import { ItalianMunicipalityAutocomplete } from "@/shared/ui/italian-municipalit
 
 const emptyClientForm: ClientFormData = {
   organizationId: "",
+  fiscalCode: "",
   firstName: "",
   lastName: "",
   phone: "",
   address: "",
   city: "",
   province: "",
+  aslNumber: "",
+  aslMunicipality: "",
   notes: "",
 };
 
@@ -123,12 +126,22 @@ export function ClientFormDialog({
           <Stack spacing={2.5} sx={{ pt: 1.5 }}>
             {submitError ? <Alert severity="error">{submitError}</Alert> : null}
             <TextField
+              label="Codice fiscale"
+              value={formValues.fiscalCode}
+              onChange={(event) =>
+                handleFieldChange(
+                  "fiscalCode",
+                  event.target.value.toUpperCase(),
+                )
+              }
+              required
+            />
+            <TextField
               label="Nome"
               value={formValues.firstName}
               onChange={(event) =>
                 handleFieldChange("firstName", event.target.value)
               }
-              required
             />
             <TextField
               label="Cognome"
@@ -136,7 +149,6 @@ export function ClientFormDialog({
               onChange={(event) =>
                 handleFieldChange("lastName", event.target.value)
               }
-              required
             />
             <TextField
               label="Telefono"
@@ -192,6 +204,20 @@ export function ClientFormDialog({
               renderInput={(params) => (
                 <TextField {...params} label="Provincia" />
               )}
+            />
+            <TextField
+              label="Numero ASL"
+              value={formValues.aslNumber}
+              onChange={(event) =>
+                handleFieldChange("aslNumber", event.target.value)
+              }
+            />
+            <TextField
+              label="Comune ASL"
+              value={formValues.aslMunicipality}
+              onChange={(event) =>
+                handleFieldChange("aslMunicipality", event.target.value)
+              }
             />
             <TextField
               label="Note"

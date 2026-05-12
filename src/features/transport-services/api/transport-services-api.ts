@@ -4,6 +4,7 @@ import { buildQueryString } from "@/core/api/query-string";
 import type { QueryParameters } from "@/core/api/types";
 import type {
   AssignVehicleAsVolunteerInput,
+  AssignVehicleToTransportServiceInput,
   AssignVehicleAsVolunteerRequestDto,
   AssignTransportServiceInput,
   AssignTransportServiceRequestDto,
@@ -390,7 +391,6 @@ function toTransportCalendarEventModel(
     clientDisplayName,
     pickupDestinationId,
     pickupDestinationName: dto.pickupDestinationName ?? null,
-    pickupDestinationDescription: dto.pickupDestinationDescription ?? null,
     pickupDestinationAddress: dto.pickupDestinationAddress ?? null,
     pickupDestinationCity: dto.pickupDestinationCity ?? null,
     pickupDestinationProvince: dto.pickupDestinationProvince ?? null,
@@ -429,16 +429,23 @@ function toTransportCalendarEventModel(
 function toUpsertPayload(
   input: TransportServiceUpsertInput,
 ): TransportServiceUpsertRequestDto {
+  const normalizedStatus =
+    input.status === "accepted" || input.status === "pending"
+      ? input.status
+      : null;
+
   return {
     organizationId: toNullableTrimmed(input.organizationId),
     clientId: toNullableTrimmed(input.clientId),
     pickupDestinationId: toNullableTrimmed(input.pickupDestinationId),
     transportType: toNullableTrimmed(input.transportType),
+    status: toNullableTrimmed(normalizedStatus),
     scheduledAt: toNullableTrimmed(input.scheduledAt),
     scheduledEnd: toNullableTrimmed(input.scheduledEnd),
     dropoffAddress: toNullableTrimmed(input.dropoffAddress),
     dropoffCity: toNullableTrimmed(input.dropoffCity),
     dropoffProvince: toNullableTrimmed(input.dropoffProvince),
+    vehicleId: toNullableTrimmed(input.vehicleId),
     isPaid: input.isPaid,
     amount: input.isPaid ? (input.amount ?? null) : null,
     note: toNullableTrimmed(input.note),
@@ -450,6 +457,7 @@ function toAssignPayload(
 ): AssignTransportServiceRequestDto {
   return {
     vehicleId: toNullableTrimmed(input.vehicleId),
+    assignedByUserId: toNullableTrimmed(input.assignedByUserId),
     teamMembers: input.teamMembers.map((member) => ({
       volunteerId: toNullableTrimmed(member.volunteerId),
       role: toNullableTrimmed(member.role),
@@ -613,6 +621,21 @@ export async function selfAssignVehicleToTransportService(
 ) {
   const response = await apiClient<TransportServiceDto>(
     `${transportServicesEndpoint}/${id}/me/vehicle`,
+    {
+      method: "PUT",
+      body: JSON.stringify(toAssignVehicleAsVolunteerPayload(input)),
+    },
+  );
+
+  return toTransportServiceModel(response);
+}
+
+export async function assignVehicleToTransportService(
+  id: string,
+  input: AssignVehicleToTransportServiceInput,
+) {
+  const response = await apiClient<TransportServiceDto>(
+    `${transportServicesEndpoint}/${id}/vehicle`,
     {
       method: "PUT",
       body: JSON.stringify(toAssignVehicleAsVolunteerPayload(input)),

@@ -55,6 +55,7 @@ import {
 import { ErrorState, LoadingState } from "@/shared/ui/feedback-states";
 import { SearchToolbar } from "@/shared/ui/search-toolbar";
 import {
+  workspaceCompactPrimaryActionButtonSx,
   workspaceHeaderIconSx,
   workspacePrimaryActionButtonSx,
 } from "@/shared/ui/workspace-styles";
@@ -161,14 +162,6 @@ export function UsersWorkspace() {
         valueGetter: (_, row) => row.lastName || "-",
       },
       {
-        field: "phone",
-        headerName: "Telefono",
-        flex: 0.8,
-        minWidth: 150,
-        sortable: false,
-        valueGetter: (_, row) => row.phone || "-",
-      },
-      {
         field: "userType",
         headerName: "Tipo",
         flex: 0.8,
@@ -224,7 +217,6 @@ export function UsersWorkspace() {
       password: "",
       firstName: source.firstName,
       lastName: source.lastName,
-      phone: source.phone ?? "",
       isActive: source.isActive,
       userType: source.userType,
     };
@@ -339,7 +331,6 @@ export function UsersWorkspace() {
       password: values.password,
       firstName: values.firstName,
       lastName: values.lastName,
-      phone: values.phone,
       isActive: values.isActive,
       userType: values.userType,
     });
@@ -448,15 +439,6 @@ export function UsersWorkspace() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownload />}
-              sx={{ minHeight: 34, px: 1.35 }}
-              onClick={() => exportRowsToExcel(data, gridColumns, "utenti")}
-            >
-              Export Excel
-            </Button>
-            <Button
               variant="contained"
               size="small"
               startIcon={<Add />}
@@ -513,6 +495,15 @@ export function UsersWorkspace() {
             >
               Elimina
             </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownload />}
+              sx={workspaceCompactPrimaryActionButtonSx}
+              onClick={() => exportRowsToExcel(data, gridColumns, "utenti")}
+            >
+              Export Excel
+            </Button>
           </div>
         </div>
       </ContentCard>
@@ -521,7 +512,7 @@ export function UsersWorkspace() {
         <Stack spacing={3}>
           <SearchToolbar
             searchText={searchText}
-            searchPlaceholder="Cerca utente per email, nome o telefono"
+            searchPlaceholder="Cerca utente per email o nome"
             onSearchTextChange={setSearchText}
             filters={[
               {

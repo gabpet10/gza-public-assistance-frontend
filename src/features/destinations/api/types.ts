@@ -2,7 +2,6 @@ export type Destination = {
   id: string;
   organizationId: string;
   name: string;
-  description: string;
   address: string;
   city: string;
   province: string;
@@ -14,7 +13,6 @@ export type DestinationDto = {
   id?: string | null;
   organizationId?: string | null;
   name?: string | null;
-  description?: string | null;
   address?: string | null;
   city?: string | null;
   province?: string | null;
@@ -35,7 +33,6 @@ export type DestinationPagedResultDto = {
 export type DestinationUpsertRequestDto = {
   organizationId: string | null;
   name: string | null;
-  description: string | null;
   address: string | null;
   city: string | null;
   province: string | null;
@@ -45,7 +42,6 @@ export type DestinationUpsertRequestDto = {
 export type DestinationFormData = {
   organizationId: string;
   name: string;
-  description: string;
   address: string;
   city: string;
   province: string;

@@ -22,6 +22,7 @@ import {
   getTransportStatusLabel,
   getTransportTypeLabel,
 } from "@/features/transport-services/components/transport-service-status-ui";
+import { formatTransportPlannedWindow } from "@/features/transport-services/components/transport-services-workspace-helpers";
 import {
   getWorkspaceGridRowClassName,
   organizationsEnterpriseDataGridSx,
@@ -131,6 +132,8 @@ export const transportServicesExportColumns: GridColDef<TransportService>[] = [
   {
     field: "scheduledAt",
     headerName: "Pianificato",
+    valueGetter: (_, row) =>
+      formatTransportPlannedWindow(row.scheduledAt, row.scheduledEnd),
   },
   {
     field: "dropoffCity",
@@ -258,6 +261,8 @@ export function TransportServicesGrid({
       headerName: "Pianificato",
       flex: 0.9,
       minWidth: 180,
+      renderCell: ({ row }) =>
+        formatTransportPlannedWindow(row.scheduledAt, row.scheduledEnd),
     },
     {
       field: "dropoffCity",

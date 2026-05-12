@@ -25,12 +25,15 @@ function requireField<T>(value: T | null | undefined, fieldName: string): T {
 function toPayload(input: ClientFormData): ClientUpsertRequestDto {
   return {
     organizationId: toNullableTrimmed(input.organizationId),
+    fiscalCode: toNullableTrimmed(input.fiscalCode),
     firstName: toNullableTrimmed(input.firstName),
     lastName: toNullableTrimmed(input.lastName),
     phone: toNullableTrimmed(input.phone),
     address: toNullableTrimmed(input.address),
     city: toNullableTrimmed(input.city),
     province: toNullableTrimmed(input.province),
+    aslNumber: toNullableTrimmed(input.aslNumber),
+    aslMunicipality: toNullableTrimmed(input.aslMunicipality),
     notes: toNullableTrimmed(input.notes),
   };
 }
@@ -39,14 +42,17 @@ function toClientModel(dto: ClientDto): Client {
   return {
     id: requireField(dto.id, "client.id"),
     organizationId: requireField(dto.organizationId, "client.organizationId"),
-    firstName: requireField(dto.firstName, "client.firstName"),
-    lastName: requireField(dto.lastName, "client.lastName"),
+    fiscalCode: requireField(dto.fiscalCode, "client.fiscalCode"),
+    firstName: dto.firstName ?? "",
+    lastName: dto.lastName ?? "",
     fullName: requireField(dto.fullName, "client.fullName"),
-    phone: requireField(dto.phone, "client.phone"),
-    address: requireField(dto.address, "client.address"),
-    city: requireField(dto.city, "client.city"),
-    province: requireField(dto.province, "client.province"),
-    notes: requireField(dto.notes, "client.notes"),
+    phone: dto.phone ?? "",
+    address: dto.address ?? "",
+    city: dto.city ?? "",
+    province: dto.province ?? "",
+    aslNumber: dto.aslNumber ?? "",
+    aslMunicipality: dto.aslMunicipality ?? "",
+    notes: dto.notes ?? "",
     createdAt: requireField(dto.createdAt, "client.createdAt"),
   };
 }

@@ -28,6 +28,60 @@ const allowedTransportSortFields = new Set([
 ]);
 const defaultServiceDurationMs = 1000 * 60 * 60;
 
+export type AssignDialogMember = {
+  volunteerId: string;
+  label: string;
+  role: TransportAssignmentRole;
+};
+
+export function formatTransportDateTime(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("it-IT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+export function formatTransportPlannedWindow(
+  startValue: string | null,
+  endValue: string | null,
+) {
+  const startLabel = formatTransportDateTime(startValue);
+  if (startLabel === "-") {
+    return "-";
+  }
+
+  if (!endValue) {
+    return `${startLabel} · fine non impostata`;
+  }
+
+  const parsedStart = startValue ? new Date(startValue) : null;
+  const parsedEnd = new Date(endValue);
+  if (
+    parsedStart &&
+    !Number.isNaN(parsedStart.getTime()) &&
+    !Number.isNaN(parsedEnd.getTime()) &&
+    parsedStart.toDateString() === parsedEnd.toDateString()
+  ) {
+    const endTime = parsedEnd.toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return `${startLabel} - ${endTime}`;
+  }
+
+  return `${startLabel} - ${formatTransportDateTime(endValue)}`;
+}
+
 export function sanitizeTransportSortField(value: string | undefined) {
   if (!value) {
     return undefined;

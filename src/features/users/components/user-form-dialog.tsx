@@ -39,7 +39,6 @@ const emptyUserForm: UserFormData = {
   password: "",
   firstName: "",
   lastName: "",
-  phone: "",
   isActive: true,
   userType: "operator",
 };
@@ -180,13 +179,6 @@ export function UserFormDialog({
               value={formValues.lastName}
               onChange={(event) =>
                 handleFieldChange("lastName", event.target.value)
-              }
-            />
-            <TextField
-              label="Telefono"
-              value={formValues.phone}
-              onChange={(event) =>
-                handleFieldChange("phone", event.target.value)
               }
             />
             <TextField
