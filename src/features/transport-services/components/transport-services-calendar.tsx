@@ -33,7 +33,16 @@ type TransportServicesCalendarProps = {
   onSelectEvent: (eventId: string) => void;
   onOpenEventDetail: (eventId: string) => void;
   onCreateSlot: (seedDateIso: string) => void;
-  onShiftEvent: (eventId: string, minutesDelta: number) => void;
+  onRescheduleEvent: (
+    eventId: string,
+    nextStartIso: string,
+    nextEndIso: string,
+  ) => Promise<boolean>;
+};
+
+type OptimisticSchedule = {
+  start: string;
+  end: string;
 };
 
 type SchedulerTransportEvent = {
@@ -43,7 +52,7 @@ type SchedulerTransportEvent = {
   end: string;
   color: "amber" | "green" | "blue" | "indigo" | "teal" | "grey";
   draggable: boolean;
-  resizable: false;
+  resizable: boolean;
   readOnly: boolean;
   className?: string;
 };
@@ -200,7 +209,7 @@ export function TransportServicesCalendar({
   onSelectEvent,
   onOpenEventDetail,
   onCreateSlot,
-  onShiftEvent,
+  onRescheduleEvent,
 }: TransportServicesCalendarProps) {
   const calendarHostRef = useRef<HTMLDivElement | null>(null);
   const [schedulerSidePanelAnchorElement, setSchedulerSidePanelAnchorElement] =
@@ -212,6 +221,8 @@ export function TransportServicesCalendar({
   );
   const [includeEventsWithoutVolunteers, setIncludeEventsWithoutVolunteers] =
     useState(false);
+  const [optimisticSchedulesByEventId, setOptimisticSchedulesByEventId] =
+    useState<Record<string, OptimisticSchedule>>({});
 
   const sortedEvents = useMemo(
     () =>
@@ -294,11 +305,14 @@ export function TransportServicesCalendar({
   const schedulerEvents = useMemo<SchedulerTransportEvent[]>(
     () =>
       filteredRenderableEvents.map((event) => {
-        const startDate = dayjs(event.scheduledAt).toDate();
-        const startMs = startDate.getTime();
-        const parsedEndDate = event.scheduledEnd
-          ? dayjs(event.scheduledEnd).toDate()
-          : null;
+        const optimisticSchedule = optimisticSchedulesByEventId[event.id];
+        const parsedStartDate = dayjs(
+          optimisticSchedule?.start ?? event.scheduledAt,
+        ).toDate();
+        const startMs = parsedStartDate.getTime();
+        const parsedEndDate = dayjs(
+          optimisticSchedule?.end ?? event.scheduledEnd,
+        ).toDate();
         const parsedEndMs = parsedEndDate?.getTime() ?? Number.NaN;
         const safeEndDate =
           Number.isFinite(parsedEndMs) && parsedEndMs > startMs
@@ -314,7 +328,7 @@ export function TransportServicesCalendar({
           end: safeEndDate.toISOString(),
           color: toSchedulerColor(event.status),
           draggable: event.canMove,
-          resizable: false,
+          resizable: event.canMove,
           readOnly: !event.canMove,
           className:
             event.id === selectedEventId
@@ -322,8 +336,53 @@ export function TransportServicesCalendar({
               : tokenClassName,
         };
       }),
-    [filteredRenderableEvents, selectedEventId],
+    [filteredRenderableEvents, optimisticSchedulesByEventId, selectedEventId],
   );
+
+  useEffect(() => {
+    if (Object.keys(optimisticSchedulesByEventId).length === 0) {
+      return;
+    }
+
+    const eventsById = new Map(events.map((event) => [event.id, event]));
+
+    setOptimisticSchedulesByEventId((current) => {
+      let hasChanges = false;
+      const next = { ...current };
+
+      Object.entries(current).forEach(([eventId, optimisticSchedule]) => {
+        const sourceEvent = eventsById.get(eventId);
+        if (!sourceEvent) {
+          delete next[eventId];
+          hasChanges = true;
+          return;
+        }
+
+        const serverStart = dayjs(sourceEvent.scheduledAt);
+        const serverEnd = dayjs(
+          sourceEvent.scheduledEnd ??
+            dayjs(sourceEvent.scheduledAt).add(1, "hour"),
+        );
+        const optimisticStart = dayjs(optimisticSchedule.start);
+        const optimisticEnd = dayjs(optimisticSchedule.end);
+
+        const isAlignedWithServer =
+          serverStart.isValid() &&
+          serverEnd.isValid() &&
+          optimisticStart.isValid() &&
+          optimisticEnd.isValid() &&
+          serverStart.toISOString() === optimisticStart.toISOString() &&
+          serverEnd.toISOString() === optimisticEnd.toISOString();
+
+        if (isAlignedWithServer) {
+          delete next[eventId];
+          hasChanges = true;
+        }
+      });
+
+      return hasChanges ? next : current;
+    });
+  }, [events, optimisticSchedulesByEventId]);
 
   const eventTooltipById = useMemo(() => {
     return new Map(
@@ -637,7 +696,7 @@ export function TransportServicesCalendar({
     return null;
   };
 
-  const handleSchedulerClickCapture = (
+  const handleSchedulerEventClickCapture = (
     event: React.MouseEvent<HTMLDivElement>,
   ) => {
     const target = event.target;
@@ -684,6 +743,76 @@ export function TransportServicesCalendar({
         }),
       );
     }
+  };
+
+  const toIsoOrNull = (value: unknown) => {
+    const fromDateLike = dayjs(value as string | number | Date);
+    if (fromDateLike.isValid()) {
+      return fromDateLike.toDate().toISOString();
+    }
+
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "toISOString" in value &&
+      typeof value.toISOString === "function"
+    ) {
+      const parsedFromIsoMethod = dayjs(value.toISOString() as string);
+      if (parsedFromIsoMethod.isValid()) {
+        return parsedFromIsoMethod.toDate().toISOString();
+      }
+    }
+
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "epochMilliseconds" in value &&
+      typeof value.epochMilliseconds === "number"
+    ) {
+      const parsedFromEpoch = dayjs(value.epochMilliseconds);
+      if (parsedFromEpoch.isValid()) {
+        return parsedFromEpoch.toDate().toISOString();
+      }
+    }
+
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "toInstant" in value &&
+      typeof value.toInstant === "function"
+    ) {
+      try {
+        const instant = value.toInstant() as {
+          epochMilliseconds?: number;
+          toString?: () => string;
+        };
+
+        if (typeof instant?.epochMilliseconds === "number") {
+          const parsedFromInstantEpoch = dayjs(instant.epochMilliseconds);
+          if (parsedFromInstantEpoch.isValid()) {
+            return parsedFromInstantEpoch.toDate().toISOString();
+          }
+        }
+
+        if (typeof instant?.toString === "function") {
+          const parsedFromInstantString = dayjs(instant.toString());
+          if (parsedFromInstantString.isValid()) {
+            return parsedFromInstantString.toDate().toISOString();
+          }
+        }
+      } catch {
+        // Ignore conversion failures and continue with string fallback.
+      }
+    }
+
+    if (typeof value === "object" && value !== null) {
+      const parsedFromToString = dayjs(String(value));
+      if (parsedFromToString.isValid()) {
+        return parsedFromToString.toDate().toISOString();
+      }
+    }
+
+    return null;
   };
 
   const schedulerLocaleText = useMemo(
@@ -980,7 +1109,7 @@ export function TransportServicesCalendar({
           <Stack spacing={1.5}>
             <Box
               ref={calendarHostRef}
-              onClickCapture={handleSchedulerClickCapture}
+              onClickCapture={handleSchedulerEventClickCapture}
               sx={{
                 border: "1px solid",
                 borderColor: "divider",
@@ -1051,25 +1180,54 @@ export function TransportServicesCalendar({
                     return;
                   }
 
-                  const newStartMs = new Date(
-                    changed.start as string | number | Date,
-                  ).getTime();
-                  const previousStartMs = new Date(previous.start).getTime();
-                  if (
-                    !Number.isFinite(newStartMs) ||
-                    !Number.isFinite(previousStartMs)
-                  ) {
+                  const nextStartIso = toIsoOrNull(changed.start);
+                  if (!nextStartIso) {
                     return;
                   }
 
-                  const minutesDelta = Math.round(
-                    (newStartMs - previousStartMs) / (1000 * 60),
-                  );
-                  if (minutesDelta !== 0) {
-                    onShiftEvent(changed.id, minutesDelta);
+                  const nextEndIsoRaw = toIsoOrNull(changed.end);
+                  const nextEndIso =
+                    nextEndIsoRaw ??
+                    dayjs(nextStartIso).add(1, "hour").toISOString();
+
+                  if (
+                    nextStartIso !== previous.start ||
+                    nextEndIso !== previous.end
+                  ) {
+                    setOptimisticSchedulesByEventId((current) => ({
+                      ...current,
+                      [changed.id]: {
+                        start: nextStartIso,
+                        end: nextEndIso,
+                      },
+                    }));
+
+                    void (async () => {
+                      const didReschedule = await onRescheduleEvent(
+                        changed.id,
+                        nextStartIso,
+                        nextEndIso,
+                      );
+
+                      if (didReschedule) {
+                        return;
+                      }
+
+                      setOptimisticSchedulesByEventId((current) => {
+                        if (!current[changed.id]) {
+                          return current;
+                        }
+
+                        const next = { ...current };
+                        delete next[changed.id];
+                        return next;
+                      });
+                    })();
                   }
                 }}
                 eventCreation={false}
+                areEventsDraggable
+                areEventsResizable
                 sx={{
                   height: "100%",
                   "& .MuiEventCalendar-monthViewBody": {

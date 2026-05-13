@@ -275,7 +275,6 @@ export function TransportServicesWorkspace() {
     editService,
     assignResources,
     assignVehicle,
-    shiftCalendarEvent,
     rescheduleService,
     acceptService,
     startService,
@@ -363,13 +362,14 @@ export function TransportServicesWorkspace() {
     createDialog.open();
   };
 
-  const handleShiftCalendarEventByMinutes = async (
+  const handleRescheduleCalendarEvent = async (
     eventId: string,
-    minutesDelta: number,
-  ) => {
+    nextStartIso: string,
+    nextEndIso: string,
+  ): Promise<boolean> => {
     const event = calendarEvents.find((candidate) => candidate.id === eventId);
     if (!event) {
-      return;
+      return false;
     }
 
     const expectedVersion =
@@ -379,11 +379,12 @@ export function TransportServicesWorkspace() {
         ? selectedTransportService.scheduleVersion
         : undefined);
 
-    await shiftCalendarEvent(
+    return rescheduleService(
       eventId,
       event.scheduledAt,
       event.scheduledEnd,
-      minutesDelta,
+      nextStartIso,
+      nextEndIso,
       expectedVersion,
     );
   };
@@ -1761,9 +1762,7 @@ export function TransportServicesWorkspace() {
               onSelectEvent={handleCalendarEventSelect}
               onOpenEventDetail={handleCalendarEventOpenDetail}
               onCreateSlot={handleCalendarEmptySlotCreate}
-              onShiftEvent={(eventId, minutesDelta) => {
-                void handleShiftCalendarEventByMinutes(eventId, minutesDelta);
-              }}
+              onRescheduleEvent={handleRescheduleCalendarEvent}
             />
           )}
 
